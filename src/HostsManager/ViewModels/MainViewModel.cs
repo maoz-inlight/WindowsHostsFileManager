@@ -38,6 +38,7 @@ public sealed class MainViewModel : Observable, IDisposable
         BackupsCommand = new RelayCommand(() => ShowBackups?.Invoke());
         ToggleCommand = new RelayCommand(ToggleSelected, () => SelectedEntry is { CanToggle: true });
         ShowProblemsCommand = new RelayCommand(() => Filter = EntryFilter.Problems);
+        DeleteRowCommand = new RelayCommand(o => DeleteEntry(o as EntryViewModel));
     }
 
     // ---- host-supplied dialogs -------------------------------------------
@@ -63,6 +64,13 @@ public sealed class MainViewModel : Observable, IDisposable
     public RelayCommand BackupsCommand { get; }
     public RelayCommand ToggleCommand { get; }
     public RelayCommand ShowProblemsCommand { get; }
+
+    /// <summary>
+    /// Deletes a specific row directly, without requiring it to be selected first. The
+    /// warning icon on an unparseable row uses this, so a flagged line is one click from
+    /// being removed rather than select-then-find-the-toolbar-button.
+    /// </summary>
+    public RelayCommand DeleteRowCommand { get; }
 
     private EntryViewModel? _selectedEntry;
     public EntryViewModel? SelectedEntry
@@ -237,9 +245,10 @@ public sealed class MainViewModel : Observable, IDisposable
         }
     }
 
-    private void Delete()
+    private void Delete() => DeleteEntry(SelectedEntry);
+
+    private void DeleteEntry(EntryViewModel? entry)
     {
-        var entry = SelectedEntry;
         var doc = _writer.Document;
         if (entry is null || doc is null || entry.IsReadOnly) return;
 

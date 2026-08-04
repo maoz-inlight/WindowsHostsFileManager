@@ -233,6 +233,33 @@
     </Style>
 
     <!--
+        Setting the ToolTip property to a plain string (as every row and icon button
+        here does) wraps it in a default ToolTip that uses stock OS chrome — a white
+        popup with black text, regardless of the app's palette. TargetType="ToolTip"
+        with no x:Key applies implicitly to every one of them, dark mode included.
+    -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="{DynamicResource Surface1}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="9,6" />
+        <Setter Property="HasDropShadow" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{DynamicResource BorderStrong}"
+                            BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}"
+                            MaxWidth="360">
+                        <ContentPresenter TextBlock.Foreground="{TemplateBinding Foreground}"
+                                          TextBlock.FontSize="{TemplateBinding FontSize}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
         The stock scrollbar draws its own light-grey chrome and ignores the palette,
         which leaves a white stripe down the side of a dark window.
     -->

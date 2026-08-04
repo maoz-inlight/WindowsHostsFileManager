@@ -162,9 +162,20 @@
                                 <TextBlock Text="&#xE72E;" FontFamily="Segoe MDL2 Assets" FontSize="12"
                                            Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"
                                            Visibility="{Binding IsReadOnly, Converter={StaticResource BoolToVis}}" />
-                                <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="13"
-                                           Foreground="{DynamicResource Danger}" VerticalAlignment="Center"
-                                           Visibility="{Binding IsUnparseable, Converter={StaticResource BoolToVis}}" />
+                                <!--
+                                    An unparseable line has no toggle and nothing else clickable
+                                    on the row, so without this the only way to act on it is to
+                                    know the toolbar Delete button exists. This makes removing it
+                                    the one click the row's own warning icon promises.
+                                -->
+                                <Button Style="{StaticResource IconButton}" Width="24" Height="24" Padding="0"
+                                        ToolTip="Delete this line"
+                                        Command="{Binding DataContext.DeleteRowCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}"
+                                        Visibility="{Binding IsUnparseable, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                                               Foreground="{DynamicResource Danger}" />
+                                </Button>
                             </Grid>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
