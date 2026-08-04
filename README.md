@@ -32,7 +32,8 @@ that kind of corruption stays invisible until something stops resolving.
 
 ## Installing
 
-Grab the installer matching your CPU from `dist`:
+Grab the **`.msi`** matching your CPU from `dist` — this is the installer. It puts the
+app in Program Files, adds a Start Menu shortcut, and registers an uninstall entry:
 
 | CPU | Installer |
 | --- | --- |
@@ -40,11 +41,21 @@ Grab the installer matching your CPU from `dist`:
 | ARM (Surface, Snapdragon) | `HostsManager-arm64.msi` |
 | 32-bit Intel | `HostsManager-x86.msi` |
 
-Each is self-contained — no .NET runtime needed on the target machine. A matching
-`HostsManager-<arch>.exe` sits alongside each installer if you'd rather run it without
-installing.
+Each is self-contained — no .NET runtime needed on the target machine.
 
-Not sure which you need? `echo %PROCESSOR_ARCHITECTURE%` reports `AMD64`, `ARM64` or `x86`.
+A matching `HostsManager-<arch>.exe` sits alongside each installer. That's the **portable**
+build — the same app, run directly with no install step. It's deliberately not an
+installer: running it does not touch Program Files, does not add a Start Menu entry, and
+there is no wizard to show, because nothing is being installed. If you double-click it
+expecting installer behaviour, that's why nothing seems to happen — use the `.msi` instead.
+
+Not sure which CPU you need? `echo %PROCESSOR_ARCHITECTURE%` reports `AMD64`, `ARM64` or
+`x86`.
+
+Neither build is code-signed (no certificate for this project), so Windows will likely
+show a SmartScreen "Windows protected your PC" prompt on first run. Click **More info**,
+then **Run anyway** — that's expected for any unsigned executable from an unrecognized
+publisher, not a sign anything is broken.
 
 Uninstalling removes the app but deliberately leaves your backups in place.
 

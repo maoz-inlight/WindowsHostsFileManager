@@ -215,3 +215,45 @@ The dialog's height is `SizeToContent="Height"` rather than a fixed number — a
 fixed-height version silently clipped the last line of the install-path box by a few
 pixels, invisible without owner-window screenshots since the containing `Border` doesn't
 report a layout error, it just runs out of room.
+
+## Row selection: a border, not a background swap
+
+Selecting a row swapped its background to `Surface1`, which in the dark palette sits only
+a few RGB points from the default `Surface2` — close to invisible. Worse, on an Invalid or
+Pending row the swap *replaced* the red/blue state colour outright, so selecting a flagged
+row could read as losing its warning rather than gaining a selection. Switched to a 2px
+`Accent`-coloured border on the row instead: a different property than `Background`, so it
+layers on top of whatever state colour is already there instead of competing with it.
+Confirmed visually against both a Normal and an Invalid row before shipping.
+
+The same pass added a real delete affordance to unparseable rows — the warning icon was a
+static glyph with nothing clickable on the row, so removing one meant knowing the toolbar
+Delete button existed and worked on whatever was selected. It's now a button wired through
+`MainViewModel.DeleteRowCommand`, which shares the same confirm-before-delete path as the
+toolbar (`DeleteEntry`, extracted from the old `Delete()` so both call sites use it).
+
+## The "broken installer" that wasn't: .msi vs. portable .exe
+
+Reported twice: the installer doesn't put the app in Program Files, and never shows a
+wizard. Re-reading `Package.wxs` and querying the compiled `dist/HostsManager-x64.msi`
+directly via the Windows Installer COM API (`Directory`, `Dialog`, `InstallUISequence`,
+`Property` tables — the same read-only technique used earlier to verify the upgrade
+mechanism) showed nothing wrong: `INSTALLFOLDER` resolves through
+`ProgramFiles6432Folder` to the real Program Files, `ALLUSERS=1`, and the full
+`WixUI_InstallDir` wizard is correctly sequenced. No Group Policy or Windows Installer
+registry setting on the machine was suppressing UI either, and the `.msi` file
+association was the untouched Windows default.
+
+The actual file involved — found by checking Downloads — was `HostsManager-arm64.exe`,
+not an `.msi`: the **portable build**, downloaded from the stale `v1.0.0` GitHub release
+(its `ProductVersion` still carried the pre-fix `+<git-sha>` suffix). Running it was never
+going to show install UI, because it isn't an installer — no Program Files entry, no
+Start Menu shortcut, nothing to wizard through, by design. Confirmed once the right file
+(`HostsManager-arm64.msi`) was run: it showed the full wizard correctly.
+
+Two changes followed from this, neither a code fix: the README's Installing section now
+states the `.msi`/`.exe` distinction up front rather than mentioning the portable build
+as an aside, and calls out that an unsigned, un-code-signed build will trigger a
+SmartScreen prompt on first run — expected, not a sign of a broken build. And `v1.0.1`
+was cut specifically so the GitHub release matches what's actually been fixed, rather
+than leaving `v1.0.0` — already known to be stale — as the only thing to download.
