@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using HostsManager.Core;
 using HostsManager.ViewModels;
+using HostsManager.Views;
 
 namespace HostsManager.Services;
 
@@ -19,9 +20,9 @@ public sealed class TrayIcon : IDisposable
     private readonly Action _exit;
     private readonly Action _showAbout;
 
-    // Built once. The menu is rebuilt on every open, and a font allocated per rebuild
-    // would leak a GDI handle each time in an app designed to sit in the tray for days.
-    private readonly Font _boldFont;
+    // The popup shown on right-click. Closed and rebuilt fresh on every open, same as the
+    // old ContextMenuStrip was, so the toggle rows always reflect the current file state.
+    private TrayMenu? _menu;
 
     public TrayIcon(MainViewModel viewModel, Action showWindow, Action exit, Action showAbout)
     {
@@ -29,18 +30,18 @@ public sealed class TrayIcon : IDisposable
         _showWindow = showWindow;
         _exit = exit;
         _showAbout = showAbout;
-        _boldFont = new Font(System.Drawing.SystemFonts.MenuFont!, System.Drawing.FontStyle.Bold);
 
         _icon = new NotifyIcon
         {
             Icon = LoadIcon(),
             Text = "Hosts manager",
             Visible = true,
-            ContextMenuStrip = new ContextMenuStrip(),
         };
 
         _icon.DoubleClick += (_, _) => _showWindow();
-        _icon.ContextMenuStrip.Opening += (_, _) => BuildMenu();
+        // ContextMenuStrip only ever auto-opened on right-click; matching that here since
+        // there is no built-in equivalent once the menu is a plain WPF window.
+        _icon.MouseUp += (_, e) => { if (e.Button == MouseButtons.Right) ShowMenu(); };
     }
 
     public void ShowMessage(string title, string body) =>
@@ -60,36 +61,42 @@ public sealed class TrayIcon : IDisposable
         return SystemIcons.Application;
     }
 
-    private void BuildMenu()
+    private void ShowMenu()
     {
-        var menu = _icon.ContextMenuStrip!;
+        // A stray second right-click while one is already open would otherwise stack a
+        // new popup on top of it instead of replacing it.
+        _menu?.Close();
 
-        // Clear() detaches items without disposing them. Snapshot and clear before
-        // disposing, since disposing an item removes it from the collection it is in.
-        var stale = menu.Items.Cast<ToolStripItem>().ToArray();
-        menu.Items.Clear();
-        foreach (var item in stale) item.Dispose();
+        _menu = new TrayMenu(BuildRows());
 
-        var open = new ToolStripMenuItem("Open hosts manager", null, (_, _) => _showWindow())
+        var point = Cursor.Position;
+        var workingArea = Screen.FromPoint(point).WorkingArea;
+        _menu.ShowNear(point, workingArea);
+    }
+
+    private List<object> BuildRows()
+    {
+        var rows = new List<object>
         {
-            Font = _boldFont,
+            new TrayHeaderRow("Open hosts manager", _showWindow),
+            new TraySeparator(),
         };
-        menu.Items.Add(open);
-        menu.Items.Add(new ToolStripSeparator());
 
-        AddToggleSection(menu);
+        AddToggleRows(rows);
 
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("Flush DNS cache", null, (_, _) =>
+        rows.Add(new TraySeparator());
+        rows.Add(new TrayActionRow("Flush DNS cache", () =>
         {
             var (success, message) = DnsFlusher.Flush();
             ShowMessage(success ? "Hosts manager" : "Could not flush DNS", message);
         }));
-        menu.Items.Add(new ToolStripMenuItem("About", null, (_, _) => _showAbout()));
-        menu.Items.Add(new ToolStripMenuItem("Exit", null, (_, _) => _exit()));
+        rows.Add(new TrayActionRow("About", _showAbout));
+        rows.Add(new TrayActionRow("Exit", _exit));
+
+        return rows;
     }
 
-    private void AddToggleSection(ContextMenuStrip menu)
+    private void AddToggleRows(List<object> rows)
     {
         var document = _viewModel.Writer.Document;
         if (document is null) return;
@@ -99,28 +106,22 @@ public sealed class TrayIcon : IDisposable
         // window is dirty the quick toggles stand down rather than save on the user's behalf.
         if (_viewModel.IsDirty)
         {
-            menu.Items.Add(new ToolStripMenuItem("Unsaved changes — open the app to save") { Enabled = false });
+            rows.Add(new TrayTextRow("Unsaved changes — open the app to save"));
             return;
         }
 
         var entries = document.Lines.Where(l => l.IsEntry && !l.IsReadOnly).ToList();
         if (entries.Count == 0)
         {
-            menu.Items.Add(new ToolStripMenuItem("No entries") { Enabled = false });
+            rows.Add(new TrayTextRow("No entries"));
             return;
         }
 
         foreach (var entry in entries)
         {
             var label = entry.PrimaryHostname ?? entry.Body.Trim();
-            var item = new ToolStripMenuItem(label, null, (_, _) => QuickToggle(entry))
-            {
-                Checked = entry.IsEnabled,
-                CheckOnClick = false,
-                ToolTipText = $"{entry.Ip}  {string.Join(' ', entry.Hostnames)}",
-            };
-
-            menu.Items.Add(item);
+            var tooltip = $"{entry.Ip}  {string.Join(' ', entry.Hostnames)}";
+            rows.Add(new TrayToggleRow(label, tooltip, entry.IsEnabled, () => QuickToggle(entry)));
         }
     }
 
@@ -154,9 +155,8 @@ public sealed class TrayIcon : IDisposable
 
     public void Dispose()
     {
+        _menu?.Close();
         _icon.Visible = false;
-        _icon.ContextMenuStrip?.Dispose();
         _icon.Dispose();
-        _boldFont.Dispose();
     }
 }

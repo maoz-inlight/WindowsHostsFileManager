@@ -257,3 +257,41 @@ as an aside, and calls out that an unsigned, un-code-signed build will trigger a
 SmartScreen prompt on first run — expected, not a sign of a broken build. And `v1.0.1`
 was cut specifically so the GitHub release matches what's actually been fixed, rather
 than leaving `v1.0.0` — already known to be stale — as the only thing to download.
+
+## Tray menu: a themed WPF popup, not ContextMenuStrip
+
+The tray icon's right-click menu was `System.Windows.Forms.ContextMenuStrip` — stock OS
+chrome, since `NotifyIcon` only exists in WinForms and the menu came bundled with it,
+untouched by the app's own `DynamicResource` palette used everywhere else. Replaced with
+a borderless WPF popup ([Views/TrayMenu.xaml](../src/HostsManager/Views/TrayMenu.xaml)),
+styled the same way as the `FlatComboBox` dropdown already in `Controls.xaml`: rounded
+`Surface2` border, `DropShadowEffect` for elevation, and the same `ToggleSwitch` style the
+main grid uses for the domain rows, so toggling from the tray looks like the same control
+instead of a checkmark on a menu item.
+
+Rows are five small record types (`TrayHeaderRow`, `TrayActionRow`, `TrayToggleRow`,
+`TrayTextRow`, `TraySeparator`) rendered via per-type `DataTemplate`s, built fresh by
+`TrayIcon.BuildRows()` on every open — same data and same close-over-`QuickToggle` logic
+as the old `BuildMenu()`/`AddToggleSection()`, just emitting these records instead of
+`ToolStripMenuItem`s. `NotifyIcon` keeps only the icon; `MouseUp` with the right button
+now triggers the popup directly, replacing the free auto-open `ContextMenuStrip` gave.
+
+**Ambiguous-type risk, avoided by construction.** `UseWindowsForms` and `UseWPF` together
+mean `Button`, `CheckBox`, and several other names exist in both namespaces and are
+ambiguous in plain C#. Rather than fully-qualifying or aliasing every one in code (as
+`TrayIcon.cs` already does for its handful of WinForms calls), `TrayMenu`'s rows are
+declared entirely as XAML `DataTemplate`s — XAML resolves against the WPF `presentation`
+namespace only, so the ambiguity never comes up. The one place C# constructs UI-adjacent
+values is `ShowNear`'s positioning math, which uses `System.Drawing.Point`/`Rectangle`
+(passed in from `TrayIcon.cs`, which already deals in WinForms screen types) — no WPF
+control types touched there either.
+
+**Verified by screenshot, the hard way.** Windows 11's tray overflow flyout doesn't
+respond to synthetic `Invoke`/mouse input (confirmed: UI Automation's own `InvokePattern`
+and a real `SendInput`-level click at the flyout chevron's exact reported coordinates both
+did nothing visible), so driving it to test the new popup wasn't an option. Verified
+instead with a temporary `F9` hook wired straight to `TrayIcon.ShowMenu()` — bypassing the
+shell flyout entirely — screenshotted in both themes via `PrintWindow` on the popup's own
+handle (screen-coordinate capture kept reading wildly inconsistent virtual-desktop bounds
+across calls on this machine's mixed-DPI multi-monitor setup, so window-handle capture was
+the only reliable method), then removed before committing.

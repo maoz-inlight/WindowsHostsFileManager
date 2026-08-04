@@ -23,8 +23,9 @@ that kind of corruption stays invisible until something stops resolving.
 - **Leaves other tools alone.** Docker Desktop and Tailscale blocks are shown read-only and are
   never rewritten.
 - **Backs up before every save**, keeps a permanent copy of the original, and can restore either.
-- **Lives in the notification area.** Closing the window hides it there; the tray menu can
-  toggle any domain without opening the app at all.
+- **Lives in the notification area.** Closing the window hides it there; a themed tray
+  menu — matching the app, not stock OS chrome — can toggle any domain without opening
+  the app at all.
 - **Follows your Windows light/dark setting**, including the title bar, and switches live.
 - **Runs as a single instance**, so two copies can't fight over the same file.
 - **Shows its version in an About dialog** (the ⓘ icon in the header, or the tray menu),
