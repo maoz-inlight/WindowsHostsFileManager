@@ -157,4 +157,127 @@ public class RegressionTests
 
         Assert.Throws<InvalidOperationException>(() => doc.ClearPendingMarkers());
     }
+
+    // ---- backup manifests describe the bytes they contain ------------------
+
+    /// <summary>
+    /// The manifest used to be built from whatever the caller passed alongside the bytes,
+    /// so a backup holding the pre-save file was stamped with the post-edit entry count.
+    /// </summary>
+    [Fact]
+    public void BackupTakenDuringSave_RecordsTheEntryCountOfTheFileItActuallyContains()
+    {
+        var hostsPath = Fixture.CopyToTemp(out var workDir);
+        try
+        {
+            var backups = new BackupManager(Path.Combine(workDir, "backups"));
+            var writer = new HostsFileWriter(hostsPath, backups);
+
+            var doc = writer.Load();
+            var countBeforeEdit = doc.Entries.Count();
+
+            doc.AddEntry("127.0.0.1", new[] { "counted.local" });
+            Assert.Equal(countBeforeEdit + 1, doc.Entries.Count());
+
+            writer.Save();
+
+            // The backup holds the file as it was *before* the save.
+            var backup = backups.List().First(b => !b.IsOriginal);
+            Assert.Equal(countBeforeEdit, backup.EntryCount);
+        }
+        finally
+        {
+            try { Directory.Delete(workDir, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// The pre-restore backup holds the current file, but used to be labelled with the
+    /// encoding of the backup being restored — a different file entirely.
+    /// </summary>
+    [Fact]
+    public void BackupTakenBeforeRestore_RecordsTheEncodingOfTheFileItActuallyContains()
+    {
+        var hostsPath = Fixture.CopyToTemp(out var workDir);
+        try
+        {
+            var backups = new BackupManager(Path.Combine(workDir, "backups"));
+            var writer = new HostsFileWriter(hostsPath, backups);
+            writer.Load();
+
+            // Deliberately a different format from the fixture's UTF-8 BOM + CRLF.
+            var lfBytes = Encoding.UTF8.GetBytes("127.0.0.1 lf-no-bom.local\n");
+            var lfBackup = backups.Create(lfBytes, "Handmade LF backup");
+            Assert.Equal("UTF-8 · LF", lfBackup.Encoding);
+
+            writer.Restore(lfBackup);
+
+            var undoPoint = backups.List().First(b => b.Reason.StartsWith("Before restoring"));
+            Assert.Equal("UTF-8 BOM · CRLF", undoPoint.Encoding);
+        }
+        finally
+        {
+            try { Directory.Delete(workDir, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    // ---- restore is not blocked by the save path's drift check -------------
+
+    /// <summary>
+    /// Save refuses when the file changed underneath it, because it would overwrite those
+    /// changes unknowingly. Restore overwrites deliberately and backs the current bytes up
+    /// first, so refusing would only ever fire in the situation restore exists for.
+    /// </summary>
+    [Fact]
+    public void Restore_StillWorksAfterAnotherToolRewroteTheFile()
+    {
+        var hostsPath = Fixture.CopyToTemp(out var workDir);
+        try
+        {
+            var backups = new BackupManager(Path.Combine(workDir, "backups"));
+            var writer = new HostsFileWriter(hostsPath, backups);
+            writer.Load();
+
+            var original = backups.List().Single(b => b.IsOriginal);
+            var originalBytes = File.ReadAllBytes(original.FilePath);
+
+            // Something else rewrites the file behind our back.
+            File.WriteAllText(hostsPath, "127.0.0.1 written-by-docker.local\r\n");
+            Assert.True(writer.HasExternalChange());
+
+            var result = writer.Restore(original);
+
+            Assert.True(result.Success);
+            Assert.Equal(originalBytes, File.ReadAllBytes(hostsPath));
+        }
+        finally
+        {
+            try { Directory.Delete(workDir, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>The drifted content is still captured, so the restore itself is undoable.</summary>
+    [Fact]
+    public void Restore_AfterExternalChange_StillCapturesWhatItOverwrote()
+    {
+        var hostsPath = Fixture.CopyToTemp(out var workDir);
+        try
+        {
+            var backups = new BackupManager(Path.Combine(workDir, "backups"));
+            var writer = new HostsFileWriter(hostsPath, backups);
+            writer.Load();
+
+            const string external = "127.0.0.1 written-by-docker.local\r\n";
+            File.WriteAllText(hostsPath, external);
+
+            writer.Restore(backups.List().Single(b => b.IsOriginal));
+
+            var undoPoint = backups.List().First(b => b.Reason.StartsWith("Before restoring"));
+            Assert.Equal(external, File.ReadAllText(undoPoint.FilePath));
+        }
+        finally
+        {
+            try { Directory.Delete(workDir, recursive: true); } catch (IOException) { }
+        }
+    }
 }

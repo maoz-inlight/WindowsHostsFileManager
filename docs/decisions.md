@@ -323,3 +323,75 @@ real tray icon, and reading back the actual numbers (`area={3840x2088} size=345x
 3323,1623 IsVisible=True IsActive=True`) rather than trusting another screenshot. The
 lesson worth keeping: a UI screenshot taken through a path the user never exercises tests
 the rendering, not the feature.
+
+## Second review pass: the write path
+
+### Windows 11 as the floor, enforced by the installer
+
+The MSI allowed `VersionNT >= 601` — Windows 7 — while the app bundles .NET 8, which
+[doesn't run on Windows 7 or 8.1 at all](https://learn.microsoft.com/en-us/dotnet/core/install/windows#supported-versions).
+The install would succeed and the app would then fail to start. The floor is now Windows
+11, which is higher than .NET 8 strictly requires (it supports Windows 10 1607+) and is a
+deliberate choice: this is only developed and tested against Windows 11.
+
+`VersionNT` alone can't express that. Reading the property out of the built MSI on this
+machine gives `VersionNT = 1000, WindowsBuild = 26200` — so `VersionNT` is 1000 for *every*
+Windows 10 and 11 build and can't tell them apart (the widely-repeated "VersionNT caps at
+603" does not apply to a current Windows Installer). `WindowsBuild >= 22000` is what
+actually distinguishes Windows 11. Verified by compiling the condition and evaluating it
+against both the real machine and simulated older build numbers rather than assuming.
+
+### One write path, so save and restore can't diverge
+
+`Restore()` claimed to run "the same verified pipeline" as `Save()` but had drifted: no
+post-write hash comparison, and its failure handler called `TryRestore` while discarding
+the result, then reported "The hosts file is unchanged" — a message that would be a lie
+precisely when the rollback had also failed and the user most needed the truth.
+
+Both now go through one private `Commit`, which backs up, replaces, reads back, and rolls
+back on failure. `RolledBack` reports what actually happened, naming the backup file and
+the `--restore-latest` flag when the rollback itself failed.
+
+Restore opts out of exactly one gate, the drift check, via `refuseOnDrift: false`. That's
+deliberate rather than an oversight: a save writes a whole file built from a model captured
+at load time, so unrelated external edits would be destroyed silently — refusing is the
+safe answer. A restore overwrites *on purpose*, the user asked for it explicitly, and
+`Commit` backs up the current bytes first, so nothing is lost. Refusing there would only
+ever fire in the exact situation restore exists to get you out of.
+
+### The ACL guarantee applied to the fallback too
+
+`ReplaceFile` used `File.Replace` (which preserves the destination's ACL) and silently fell
+back to `File.Move` when that threw. A move keeps the *source* file's permissions, so the
+hosts file would quietly inherit whatever the temp file picked up from the `etc` directory
+— while the method's own doc comment and the README both promised ACL preservation.
+
+The fallback now captures the destination's access rules first and reapplies them after the
+move, and raises if it can't. Silently loosening permissions on a file in System32 as a
+side effect of an apparently successful save is not an acceptable outcome. The catch was
+also narrowed from `catch (Exception)` to the three types `Replace` actually throws when a
+filesystem or security product refuses it.
+
+`HostsManager.Core` targets plain `net8.0` with `TreatWarningsAsErrors`, so the ACL calls
+are behind `OperatingSystem.IsWindows()` guards — without them CA1416 fails the build.
+
+### Backup manifests describe their own contents
+
+The entry count and encoding were parameters, which let them disagree with the bytes they
+were filed against: a save stamped the backup of the *pre*-save file with the *post*-edit
+entry count, and a pre-restore backup was labelled with the encoding of the backup being
+restored — a different file entirely. Recovery still worked; the metadata just lied.
+`BackupManager.Write` now derives both from the bytes it is given, so they cannot drift.
+
+Two regression tests pin this, each written to prove it discriminates: both assert the old
+buggy value and the correct value differ within the same test, so neither could pass
+against the previous code.
+
+### CI
+
+There was none. `.github/workflows/ci.yml` runs on `windows-latest` — mandatory, since the
+app is WPF and the installer is WiX. It runs the test suite first (fail fast on logic), then
+builds the WPF project, which nothing else in the run would compile: the tests reference
+only `HostsManager.Core`, so a broken XAML binding would otherwise sail through green. It
+finishes with one x64 installer build to catch broken WiX authoring. Every step was run
+locally first — a CI file that has never been executed is a guess, not a safety net.

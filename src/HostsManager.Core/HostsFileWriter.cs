@@ -53,7 +53,7 @@ public sealed class HostsFileWriter
         Document = HostsFileParser.Parse(text, format, _markers);
         LoadedSha256 = HostsDocument.Sha256(bytes);
 
-        Backups.EnsureOriginal(bytes, Document.Entries.Count(), format, out var backupError);
+        Backups.EnsureOriginal(bytes, out var backupError);
         BackupWarning = backupError;
 
         return Document;
@@ -76,16 +76,7 @@ public sealed class HostsFileWriter
     {
         var doc = Document ?? throw new HostsWriteException("Load the hosts file before saving.");
 
-        // 1. Drift check — never clobber changes another tool made since we loaded.
-        var currentBytes = File.Exists(HostsPath) ? File.ReadAllBytes(HostsPath) : null;
-        if (currentBytes is null)
-            throw new HostsWriteException($"Hosts file not found at {HostsPath}.");
-
-        if (HostsDocument.Sha256(currentBytes) != LoadedSha256)
-            throw new HostsDriftException(
-                "The hosts file changed on disk since it was loaded. Reload before saving so those changes aren't lost.");
-
-        // 2 & 3 & 4. Render, then prove the render survives a parse unchanged.
+        // Render, then prove the render survives a parse unchanged.
         var rendered = doc.Render();
         HostsFileVerifier.Verify(doc, rendered);
 
@@ -97,47 +88,14 @@ public sealed class HostsFileWriter
                 $"This file is {doc.Format.Describe()} and cannot store one of the characters you entered. " +
                 "The hosts file is unchanged. Remove any accented or non-Latin characters from your comments and try again.");
 
-        var newBytes = doc.Format.Encode(rendered);
+        // A save writes the whole file from a model built at load time, so an edit another
+        // tool made since then would be silently overwritten. Refusing is the safe answer.
+        var result = Commit(doc.Format.Encode(rendered), reason, refuseOnDrift: true,
+            failureAdvice: "If this repeats, check whether antivirus or Controlled Folder Access " +
+                           "is blocking writes to the hosts file.");
 
-        // 5. Back up. A save that cannot be undone does not happen.
-        BackupEntry backup;
-        try
-        {
-            backup = Backups.Create(currentBytes, reason, doc.Entries.Count(), doc.Format);
-        }
-        catch (Exception ex)
-        {
-            throw new HostsWriteException(
-                $"Could not write a backup to {Backups.Directory}, so the save was cancelled. The hosts file is unchanged.", ex);
-        }
-
-        // 6. Atomic replace.
-        try
-        {
-            ReplaceFile(newBytes);
-        }
-        catch (Exception ex)
-        {
-            var rolledBack = TryRestore(currentBytes);
-            throw new HostsWriteException(
-                $"Writing the hosts file failed. {(rolledBack ? "The original was restored." : $"Restore from {backup.FilePath}.")} " +
-                "If this repeats, check whether antivirus or Controlled Folder Access is blocking writes to the hosts file.", ex);
-        }
-
-        // 7. Read back and confirm the bytes on disk are the bytes we meant to write.
-        var writtenSha = HostsDocument.Sha256(File.ReadAllBytes(HostsPath));
-        var expectedSha = HostsDocument.Sha256(newBytes);
-        if (writtenSha != expectedSha)
-        {
-            var rolledBack = TryRestore(currentBytes);
-            throw new HostsWriteException(
-                $"The hosts file on disk does not match what was written. {(rolledBack ? "The original was restored." : $"Restore from {backup.FilePath}.")}");
-        }
-
-        LoadedSha256 = writtenSha;
         doc.Commit();
-
-        return new SaveResult(true, "Saved.", backup.FilePath);
+        return result with { Message = "Saved." };
     }
 
     /// <summary>Restores a backup through the same verified pipeline rather than a raw copy.</summary>
@@ -153,21 +111,83 @@ public sealed class HostsFileWriter
         var candidate = HostsFileParser.Parse(text, format, _markers);
         HostsFileVerifier.Verify(candidate, candidate.Render());
 
-        var currentBytes = File.ReadAllBytes(HostsPath);
-        Backups.Create(currentBytes, $"Before restoring {backup.FileName}", Document?.Entries.Count() ?? 0, format);
+        // Deliberately does NOT refuse on drift, unlike a save. Overwriting whatever is
+        // currently there is the entire point of a restore, the user asked for it
+        // explicitly, and Commit backs the current bytes up first either way — so nothing
+        // is lost. Refusing here would only ever fire in the situation restore exists for.
+        var result = Commit(restoreBytes, $"Before restoring {backup.FileName}", refuseOnDrift: false);
 
+        Load();
+        return result with { Message = $"Restored from {backup.FileName}.", BackupPath = backup.FilePath };
+    }
+
+    // ---- the one write path ----------------------------------------------
+
+    /// <summary>
+    /// The only code that ever writes the hosts file. Save and restore both go through it
+    /// so they cannot drift apart on which safety gates they run: back up, replace
+    /// atomically, then read back and prove the bytes on disk are the bytes intended. Any
+    /// failure after the file was touched rolls back, and says so honestly if the rollback
+    /// itself failed.
+    /// </summary>
+    private SaveResult Commit(byte[] newBytes, string backupReason, bool refuseOnDrift,
+        string? failureAdvice = null)
+    {
+        if (!File.Exists(HostsPath))
+            throw new HostsWriteException($"Hosts file not found at {HostsPath}.");
+
+        var currentBytes = File.ReadAllBytes(HostsPath);
+
+        if (refuseOnDrift && HostsDocument.Sha256(currentBytes) != LoadedSha256)
+            throw new HostsDriftException(
+                "The hosts file changed on disk since it was loaded. Reload before saving so those changes aren't lost.");
+
+        // A change that cannot be undone does not happen.
+        BackupEntry backup;
         try
         {
-            ReplaceFile(restoreBytes);
+            backup = Backups.Create(currentBytes, backupReason);
         }
         catch (Exception ex)
         {
-            TryRestore(currentBytes);
-            throw new HostsWriteException("Restore failed. The hosts file is unchanged.", ex);
+            throw new HostsWriteException(
+                $"Could not write a backup to {Backups.Directory}, so nothing was changed. The hosts file is unchanged.", ex);
         }
 
-        Load();
-        return new SaveResult(true, $"Restored from {backup.FileName}.", backup.FilePath);
+        try
+        {
+            ReplaceFile(newBytes);
+        }
+        catch (Exception ex)
+        {
+            throw RolledBack("Writing the hosts file failed.", currentBytes, backup, failureAdvice, ex);
+        }
+
+        var writtenSha = HostsDocument.Sha256(File.ReadAllBytes(HostsPath));
+        if (writtenSha != HostsDocument.Sha256(newBytes))
+            throw RolledBack("The hosts file on disk does not match what was written.",
+                currentBytes, backup, failureAdvice);
+
+        LoadedSha256 = writtenSha;
+        return new SaveResult(true, "Done.", backup.FilePath);
+    }
+
+    /// <summary>
+    /// Attempts a rollback and builds the exception describing what actually happened.
+    /// Reports the rollback's real outcome rather than asserting the file is untouched:
+    /// if putting the old bytes back also failed, the file is in an unknown state and
+    /// saying otherwise would send the user away from the one thing that can fix it.
+    /// </summary>
+    private HostsWriteException RolledBack(string problem, byte[] originalBytes,
+        BackupEntry backup, string? advice, Exception? inner = null)
+    {
+        var outcome = TryRestore(originalBytes)
+            ? "The previous contents were put back."
+            : $"Rolling back ALSO failed, so the hosts file may be incomplete. Restore it from " +
+              $"{backup.FilePath}, or run: HostsManager.exe --restore-latest";
+
+        var message = advice is null ? $"{problem} {outcome}" : $"{problem} {outcome} {advice}";
+        return new HostsWriteException(message, inner);
     }
 
     // ---- internals -------------------------------------------------------
@@ -177,6 +197,15 @@ public sealed class HostsFileWriter
     /// with <see cref="File.Replace(string,string,string)"/> — atomic on NTFS, and it
     /// carries over the destination's ACLs, which matters for a file owned by
     /// BUILTIN\Administrators.
+    /// <para>
+    /// Some filesystems and security products refuse <c>Replace</c> outright. The fallback
+    /// is a move, which is <em>not</em> equivalent: a move keeps the source file's
+    /// permissions, so the hosts file would silently inherit whatever the temp file picked
+    /// up from its directory. The destination's ACL is therefore captured up front and
+    /// reapplied afterwards, and a failure to reapply it is raised rather than swallowed —
+    /// quietly loosening the permissions on a file in System32 is not an acceptable
+    /// outcome of a successful-looking save.
+    /// </para>
     /// </summary>
     private void ReplaceFile(byte[] bytes)
     {
@@ -201,17 +230,60 @@ public sealed class HostsFileWriter
             {
                 File.Replace(temp, HostsPath, osBackup, ignoreMetadataErrors: true);
             }
-            catch (Exception) when (File.Exists(temp))
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                          or PlatformNotSupportedException && File.Exists(temp))
             {
-                // Some filesystems and security products refuse Replace; a move is still
-                // better than truncating the destination and writing into it.
-                File.Move(temp, HostsPath, overwrite: true);
+                MovePreservingPermissions(temp, HostsPath);
             }
         }
         finally
         {
             TryDelete(temp);
             TryDelete(osBackup);
+        }
+    }
+
+    /// <summary>
+    /// The <c>File.Replace</c> fallback. Carries the destination's existing access rules
+    /// across the move so the swap keeps the guarantee <c>Replace</c> would have given.
+    /// </summary>
+    private static void MovePreservingPermissions(string temp, string destination)
+    {
+        var original = TryReadAccessRules(destination);
+
+        File.Move(temp, destination, overwrite: true);
+
+        if (original is null) return;
+
+        try
+        {
+            if (OperatingSystem.IsWindows()) new FileInfo(destination).SetAccessControl(original);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException
+                                      or InvalidOperationException)
+        {
+            throw new HostsWriteException(
+                $"The hosts file was written, but its original permissions could not be restored " +
+                $"afterwards, so it may now be more permissive than Windows shipped it. Check the " +
+                $"Security tab of {destination}.", ex);
+        }
+    }
+
+    private static System.Security.AccessControl.FileSecurity? TryReadAccessRules(string path)
+    {
+        if (!OperatingSystem.IsWindows() || !File.Exists(path)) return null;
+
+        try
+        {
+            return new FileInfo(path).GetAccessControl(
+                System.Security.AccessControl.AccessControlSections.Access);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException
+                                      or InvalidOperationException)
+        {
+            // Can't read them, so there is nothing to reapply; the move still happens and
+            // the file keeps whatever the temp file inherited from the etc directory.
+            return null;
         }
     }
 

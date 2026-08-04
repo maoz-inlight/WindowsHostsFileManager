@@ -59,7 +59,7 @@ public sealed class BackupManager
     /// refusing is the safe answer.
     /// </para>
     /// </summary>
-    public BackupEntry? EnsureOriginal(byte[] bytes, int entryCount, FileFormat format, out string? error)
+    public BackupEntry? EnsureOriginal(byte[] bytes, out string? error)
     {
         error = null;
         if (HasOriginal) return null;
@@ -67,7 +67,7 @@ public sealed class BackupManager
         try
         {
             System.IO.Directory.CreateDirectory(Directory);
-            return Write(OriginalPath, bytes, "Original file, captured on first run", entryCount, format, isOriginal: true);
+            return Write(OriginalPath, bytes, "Original file, captured on first run", isOriginal: true);
         }
         catch (Exception ex)
         {
@@ -77,7 +77,7 @@ public sealed class BackupManager
     }
 
     /// <summary>Takes a timestamped backup and prunes older ones.</summary>
-    public BackupEntry Create(byte[] bytes, string reason, int entryCount, FileFormat format)
+    public BackupEntry Create(byte[] bytes, string reason)
     {
         System.IO.Directory.CreateDirectory(Directory);
 
@@ -85,7 +85,7 @@ public sealed class BackupManager
         for (var suffix = 1; File.Exists(path); suffix++)
             path = Path.Combine(Directory, $"hosts.{DateTime.Now:yyyyMMdd-HHmmss}-{suffix}.bak");
 
-        var entry = Write(path, bytes, reason, entryCount, format, isOriginal: false);
+        var entry = Write(path, bytes, reason, isOriginal: false);
         Prune();
         return entry;
     }
@@ -130,10 +130,28 @@ public sealed class BackupManager
 
     private static string ManifestPath(string backupPath) => backupPath + ".json";
 
-    private static BackupEntry Write(string path, byte[] bytes, string reason, int entryCount,
-        FileFormat format, bool isOriginal)
+    /// <summary>
+    /// Describes the bytes actually being backed up, rather than trusting the caller to
+    /// hand over matching metadata. The entry count and encoding used to be parameters,
+    /// which let a backup of the pre-save file get stamped with the post-edit entry count
+    /// and let a pre-restore backup get labelled with the restored file's encoding. The
+    /// bytes are the only thing that can't disagree with itself.
+    /// </summary>
+    private static (int EntryCount, string Encoding) Describe(byte[] bytes)
+    {
+        var (text, format) = FileFormat.Decode(bytes);
+
+        // Markers only decide which lines are read-only, never whether a line is an entry,
+        // so the count doesn't depend on which marker set is passed here.
+        var document = HostsFileParser.Parse(text, format, ManagedSections.Known);
+        return (document.Entries.Count(), format.Describe());
+    }
+
+    private static BackupEntry Write(string path, byte[] bytes, string reason, bool isOriginal)
     {
         File.WriteAllBytes(path, bytes);
+
+        var (entryCount, encoding) = Describe(bytes);
 
         var entry = new BackupEntry
         {
@@ -143,7 +161,7 @@ public sealed class BackupManager
             Sha256 = HostsDocument.Sha256(bytes),
             Reason = reason,
             EntryCount = entryCount,
-            Encoding = format.Describe(),
+            Encoding = encoding,
             IsOriginal = isOriginal,
         };
 

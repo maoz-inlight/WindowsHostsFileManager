@@ -28,11 +28,19 @@
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
 
     <!--
-      The app writes the hosts file, so it needs Windows 7 or later at minimum; the real
-      floor is whatever the bundled .NET runtime supports.
+      Windows 11 or later, by choice rather than by technical floor: the bundled .NET 8
+      runtime would also run on Windows 10 1607+, but this is only developed and tested
+      against Windows 11, so the installer refuses rather than shipping onto something
+      untested. The previous "VersionNT >= 601" let it install on Windows 7, which .NET 8
+      cannot run on at all.
+
+      VersionNT is 1000 for every Windows 10 and 11 build (verified by reading the property
+      out of this MSI on a build-26200 machine - the often-cited 603 cap does not apply
+      here), so it can't distinguish 10 from 11 on its own. WindowsBuild is what does:
+      22000 is the first Windows 11 release.
     -->
-    <Launch Condition="Installed OR VersionNT &gt;= 601"
-            Message="Hosts manager requires Windows 7 or later." />
+    <Launch Condition="Installed OR (VersionNT &gt;= 1000 AND WindowsBuild &gt;= 22000)"
+            Message="Hosts manager requires Windows 11 or later." />
 
     <StandardDirectory Id="ProgramFiles6432Folder">
       <Directory Id="INSTALLFOLDER" Name="Hosts manager" />

@@ -33,6 +33,12 @@ that kind of corruption stays invisible until something stops resolving.
 
 ## Installing
 
+**Requires Windows 11 or later**, and the installer enforces it. The bundled .NET 8 runtime
+would technically also run on Windows 10 1607+, but this is only developed and tested
+against Windows 11, so the installer refuses rather than putting the app somewhere it has
+never been exercised. Windows 7 and 8.1 can't run it at all —
+[.NET 8 dropped them](https://learn.microsoft.com/en-us/dotnet/core/install/windows#supported-versions).
+
 Grab the **`.msi`** matching your CPU from `dist` — this is the installer. It puts the
 app in Program Files, adds a Start Menu shortcut, and registers an uninstall entry:
 
@@ -71,7 +77,10 @@ Two deliberate consequences:
 
 - Saves use `File.Replace`, which **preserves the hosts file's original ACLs**. A plain
   overwrite from an elevated process can leave the file with different permissions than
-  Windows shipped it with.
+  Windows shipped it with. If a security product blocks `File.Replace` outright, the
+  fallback is a move — which would otherwise hand the file the temp file's permissions, so
+  the original access rules are captured beforehand and reapplied. If they can't be
+  reapplied, the save reports it rather than quietly leaving the file more permissive.
 - Backups go to `%LOCALAPPDATA%`, **not** under `System32`. That keeps them readable and
   restorable *without* elevation, which is exactly the situation you're in when something
   has gone wrong.
@@ -144,6 +153,11 @@ changes:
    `File.Replace`, which is atomic on NTFS and preserves the destination's ACLs.
 7. **Read back** — the bytes on disk are hashed and compared to what was meant to be written. A
    mismatch triggers an automatic rollback.
+
+Steps 5–7 are one shared routine, so **restoring a backup runs the same gates as saving** rather
+than being a separate, weaker path. If a rollback ever fails too, it says so and points at the
+backup instead of claiming the file is untouched. Restore deliberately skips only step 1: it
+overwrites on purpose, and step 5 captures whatever it replaced.
 
 The file's **UTF-8 BOM and CRLF line endings are preserved exactly**, never normalized. The status
 bar shows the detected encoding as visible proof.
