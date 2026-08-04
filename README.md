@@ -15,6 +15,8 @@ that kind of corruption stays invisible until something stops resolving.
 
 - **Toggle any domain on or off** with a switch. Disabling comments the line out; enabling
   uncomments it. Nothing else on the line changes.
+- **Open a domain in an isolated Edge or Chrome window** where its mapping applies only
+  to that browser. Windows DNS, the hosts file, and your normal browser stay untouched.
 - **Add and remove entries** with live validation — you see the exact line that will be written
   before it is written.
 - **Flags unparseable lines** that Windows silently ignores, with the line number, so junk is
@@ -131,6 +133,19 @@ fourth field when comparing versions, so a change there wouldn't register as an 
 | `--restore-latest` | Restore the most recent backup, no UI. |
 | `--restore-original` | Restore the pristine pre-app original, no UI. |
 
+## Isolated browser preview
+
+Select any valid entry — active, disabled, or read-only — and choose **Open isolated**.
+Hosts manager launches Edge or Chrome with a dedicated browser profile and resolver rules
+for every hostname on that entry. This is useful for opening a production hostname against
+a local or staging server while the rest of the machine continues using normal DNS.
+
+The preview never writes the hosts file and never disables certificate validation. The URL
+hostname is preserved, so the target server still needs to present the correct HTTPS
+certificate. Because Hosts manager itself runs elevated, the launch is suspended and its
+security token checked before any browser code runs; the launch is cancelled unless the
+browser has the desktop user's non-administrator token.
+
 The restore flags bypass the single-instance guard on purpose: they're what you reach for
 when something is already wrong, so they must never be refused.
 
@@ -190,7 +205,7 @@ Don't rely on System Restore or Volume Shadow Copy for this file — there's no 
 ```
 src/HostsManager.Core     Parsing, validation, backups, the write pipeline. No UI dependency.
 src/HostsManager          WPF app, tray icon, theming.
-tests/HostsManager.Tests  104 tests, run against a real hosts file as a fixture.
+tests/HostsManager.Tests  Core regression tests run against a real hosts file as a fixture.
 installer                 WiX definition and the build script.
 dist                      Installers and standalone executables.
 docs                      Design rationale and decision log — see below.

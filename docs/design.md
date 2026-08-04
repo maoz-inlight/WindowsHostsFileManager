@@ -143,6 +143,18 @@ elevation, which is exactly the situation you're in when something has gone wron
 - Status bar shows the detected encoding as visible, deliberate proof that the file's
   format is being preserved rather than silently normalized.
 
+### Isolated browser preview
+
+An entry can be opened in Edge or Chrome without modifying the system hosts file. The app
+translates every hostname on the selected line into Chromium `host-resolver-rules` and uses
+a rule-keyed browser profile, which prevents an existing browser process with a different
+ruleset from swallowing the new launch arguments.
+
+The main app is elevated, so a normal child process would inherit administrator rights.
+Browser launch therefore uses the interactive Windows shell token, creates the process
+suspended, verifies that the child is not elevated, and only then lets it execute. Failure
+to prove that boundary cancels the launch.
+
 Visual style: flat surfaces, hairline borders, no gradients or drop shadows. Colour is
 reserved for meaning — green for enabled, accent blue for pending, red for invalid,
 muted grey for read-only.

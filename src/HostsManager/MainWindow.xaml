@@ -15,11 +15,13 @@
         <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding SaveCommand}" />
         <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding AddCommand}" />
         <KeyBinding Key="R" Modifiers="Ctrl" Command="{Binding ReloadCommand}" />
+        <KeyBinding Key="O" Modifiers="Ctrl+Shift" Command="{Binding OpenIsolatedBrowserCommand}" />
         <KeyBinding Key="Delete" Command="{Binding DeleteCommand}" />
     </Window.InputBindings>
 
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -64,6 +66,10 @@
                     <Button Content="Reload" Style="{StaticResource ToolButton}" Command="{Binding ReloadCommand}" />
                     <Button Content="Backups" Style="{StaticResource ToolButton}" Command="{Binding BackupsCommand}" />
                     <Button Content="Flush DNS" Style="{StaticResource ToolButton}" Command="{Binding FlushDnsCommand}" />
+                    <Border Width="1" Background="{DynamicResource Border0}" Margin="6,2" />
+                    <Button Content="Open isolated" Style="{StaticResource ToolButton}"
+                            Command="{Binding OpenIsolatedBrowserCommand}"
+                            ToolTip="Open the selected domain in a browser without changing Windows DNS" />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -96,8 +102,20 @@
             </Grid>
         </Border>
 
+        <!-- A Chromium process whose resolver is scoped to the selected mapping -->
+        <Border Grid.Row="4" Background="{DynamicResource SuccessBg}" BorderBrush="{DynamicResource Success}"
+                BorderThickness="0,0,0,1" Padding="16,10"
+                Visibility="{Binding IsBrowserPreviewActive, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <TextBlock Text="{Binding BrowserPreviewText}" FontSize="12.5"
+                           Foreground="{DynamicResource Success}" VerticalAlignment="Center" />
+                <Button Content="Close preview" Style="{StaticResource LinkButton}" HorizontalAlignment="Right"
+                        Foreground="{DynamicResource Success}" Command="{Binding EndBrowserPreviewCommand}" />
+            </Grid>
+        </Border>
+
         <!-- Filter -->
-        <Border Grid.Row="4" BorderBrush="{DynamicResource Border0}" BorderThickness="0,0,0,1" Padding="12,10">
+        <Border Grid.Row="5" BorderBrush="{DynamicResource Border0}" BorderThickness="0,0,0,1" Padding="12,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -119,7 +137,7 @@
         </Border>
 
         <!-- Entries -->
-        <DataGrid Grid.Row="5" x:Name="EntryGrid" ItemsSource="{Binding EntriesView}"
+        <DataGrid Grid.Row="6" x:Name="EntryGrid" ItemsSource="{Binding EntriesView}"
                   SelectedItem="{Binding SelectedEntry}"
                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserResizeRows="False" CanUserReorderColumns="False"
@@ -261,7 +279,7 @@
         </DataGrid>
 
         <!-- Status bar. Showing the encoding is the visible proof the format is preserved. -->
-        <Border Grid.Row="6" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border0}"
+        <Border Grid.Row="7" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border0}"
                 BorderThickness="0,1,0,0" Padding="14,7">
             <Grid>
                 <Grid.ColumnDefinitions>

@@ -10,6 +10,8 @@ namespace HostsManager;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _vm;
+    private readonly BrowserPreviewService _browserPreview = new();
+    private BrowserPreviewSession? _browserSession;
 
     public MainWindow(MainViewModel vm)
     {
@@ -27,8 +29,62 @@ public partial class MainWindow : Window
             == MessageBoxResult.OK;
         vm.ShowError = (title, message) =>
             MessageBox.Show(this, message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        vm.RequestOpenIsolatedBrowser = OpenIsolatedBrowser;
+        vm.EndBrowserPreview = EndBrowserPreview;
 
         Loaded += (_, _) => vm.Initialize();
+    }
+
+    private void OpenIsolatedBrowser(EntryViewModel entry)
+    {
+        try
+        {
+            var browsers = _browserPreview.FindInstalledBrowsers();
+            if (browsers.Count == 0)
+            {
+                MessageBox.Show(this, "Install Microsoft Edge or Google Chrome to use an isolated preview.",
+                    "No supported browser found", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var dialog = new BrowserPreviewDialog(entry.Line, browsers) { Owner = this };
+            ThemeManager.Track(dialog);
+            if (dialog.ShowDialog() != true) return;
+
+            var session = _browserPreview.Launch(dialog.SelectedBrowser, dialog.Overrides, dialog.StartUri);
+            _browserSession = session;
+            _vm.SetBrowserPreview(session.Description);
+
+            session.Exited += () => Dispatcher.InvokeAsync(() =>
+            {
+                if (ReferenceEquals(_browserSession, session))
+                {
+                    _browserSession = null;
+                    _vm.ClearBrowserPreview();
+                }
+
+                session.Dispose();
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Could not open isolated browser",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void EndBrowserPreview()
+    {
+        if (_browserSession is null || _browserSession.HasExited)
+        {
+            _browserSession = null;
+            _vm.ClearBrowserPreview();
+            return;
+        }
+
+        if (!_browserSession.RequestClose())
+            MessageBox.Show(this, "Close the isolated browser windows to end the preview.",
+                "Preview still running", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private AddEntryRequest? ShowAddEntryDialog()
@@ -108,6 +164,7 @@ public partial class MainWindow : Window
     {
         if (_exiting)
         {
+            _browserPreview.Dispose();
             _vm.Dispose();
             base.OnClosing(e);
             return;
