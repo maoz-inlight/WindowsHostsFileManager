@@ -146,10 +146,16 @@ Don't rely on System Restore or Volume Shadow Copy for this file — there's no 
 ```
 src/HostsManager.Core     Parsing, validation, backups, the write pipeline. No UI dependency.
 src/HostsManager          WPF app, tray icon, theming.
-tests/HostsManager.Tests  93 tests, run against a real hosts file as a fixture.
+tests/HostsManager.Tests  104 tests, run against a real hosts file as a fixture.
 installer                 WiX definition and the build script.
 dist                      Installers and standalone executables.
+docs                      Design rationale and decision log — see below.
 ```
+
+- [docs/design.md](docs/design.md) — the core architecture: the line model, the safe-write
+  pipeline, backup and recovery, validation rules.
+- [docs/decisions.md](docs/decisions.md) — a log of non-obvious choices and why, including
+  what a later code review found and fixed.
 
 ```bash
 dotnet test
