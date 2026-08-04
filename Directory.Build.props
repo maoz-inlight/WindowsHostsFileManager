@@ -9,7 +9,7 @@
       parts (Major.Minor.Build): Windows Installer ignores a fourth field
       when deciding whether a version is an upgrade.
     -->
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
 
     <!--
       Without this, the SDK appends "+<git-commit-sha>" to the exe's ProductVersion
