@@ -7,6 +7,10 @@ Built because hand-editing had already gone wrong: the hosts file on this machin
 paragraph of chat text pasted in by accident. Windows silently ignores lines it can't parse, so
 that kind of corruption stays invisible until something stops resolving.
 
+![Hosts manager showing sample entries, a duplicate-domain warning, and an unparseable line flagged in red](docs/images/screenshot.png)
+
+*Shown with example data — none of the domains or IPs above are real.*
+
 ## What it does
 
 - **Toggle any domain on or off** with a switch. Disabling comments the line out; enabling

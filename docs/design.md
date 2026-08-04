@@ -48,7 +48,7 @@ Rendering an unmodified document reproduces the original bytes exactly.
 
 - `Entry` — active `IP host [host...] [# comment]`
 - `DisabledEntry` — a comment whose body parses as a valid entry (e.g.
-  `#127.0.0.1 broker.eventscalendar.co`)
+  `#127.0.0.1 staging.myapp.local`)
 - `Comment` — a real comment
 - `Blank`
 - `Unparseable` — non-blank, non-comment, doesn't parse as an entry (this is where the
