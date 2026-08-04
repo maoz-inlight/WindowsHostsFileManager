@@ -131,9 +131,8 @@
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
 
             <DataGrid.RowStyle>
-                <Style TargetType="DataGridRow">
-                    <Setter Property="Background" Value="{DynamicResource Surface2}" />
-                    <Setter Property="BorderThickness" Value="0" />
+                <!-- Selection styling lives in GridRow, shared with the backups grid. -->
+                <Style TargetType="DataGridRow" BasedOn="{StaticResource GridRow}">
                     <Setter Property="ToolTipService.InitialShowDelay" Value="400" />
                     <Setter Property="ToolTip" Value="{Binding Tooltip}" />
                     <Style.Triggers>
@@ -143,18 +142,6 @@
                         <DataTrigger Binding="{Binding State}" Value="Pending">
                             <Setter Property="Background" Value="{DynamicResource AccentBg}" />
                         </DataTrigger>
-                        <!--
-                            A background swap alone was nearly invisible in dark mode
-                            (Surface1 and Surface2 are only a few RGB points apart), and on
-                            an Invalid/Pending row it replaced the red/blue state colour
-                            instead of layering on top, so selecting a flagged row could
-                            look like it lost its warning. A border frames the row without
-                            touching Background, so it's visible against every state.
-                        -->
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
-                            <Setter Property="BorderThickness" Value="2" />
-                        </Trigger>
                     </Style.Triggers>
                 </Style>
             </DataGrid.RowStyle>

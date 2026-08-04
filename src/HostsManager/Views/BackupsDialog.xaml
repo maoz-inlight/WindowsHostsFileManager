@@ -23,13 +23,19 @@
                   GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource Border0}"
                   Background="{DynamicResource Surface2}" BorderThickness="0" RowHeight="32"
                   ColumnHeaderStyle="{StaticResource GridColumnHeader}" CellStyle="{StaticResource GridCell}"
+                  RowStyle="{StaticResource GridRow}"
                   SelectionChanged="OnSelectionChanged">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="When" Binding="{Binding When}" Width="150" />
-                <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="*" />
-                <DataGridTextColumn Header="Entries" Binding="{Binding EntryCount}" Width="70" />
-                <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="80" />
-                <DataGridTextColumn Header="Intact" Binding="{Binding Intact}" Width="70" />
+                <DataGridTextColumn Header="When" Binding="{Binding When}" Width="150"
+                                    ElementStyle="{StaticResource GridCellText}" />
+                <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="*"
+                                    ElementStyle="{StaticResource GridCellText}" />
+                <DataGridTextColumn Header="Entries" Binding="{Binding EntryCount}" Width="70"
+                                    ElementStyle="{StaticResource GridCellText}" />
+                <DataGridTextColumn Header="Size" Binding="{Binding Size}" Width="80"
+                                    ElementStyle="{StaticResource GridCellText}" />
+                <DataGridTextColumn Header="Intact" Binding="{Binding Intact}" Width="70"
+                                    ElementStyle="{StaticResource GridCellText}" />
             </DataGrid.Columns>
         </DataGrid>
 
