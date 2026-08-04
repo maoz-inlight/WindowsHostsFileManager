@@ -42,7 +42,11 @@ public partial class App : Application
         var window = new MainWindow(viewModel);
         MainWindow = window;
 
-        _tray = new TrayIcon(viewModel, ShowMainWindow, ExitApplication);
+        _tray = new TrayIcon(viewModel, ShowMainWindow, ExitApplication, () =>
+        {
+            ShowMainWindow();
+            window.ShowAbout();
+        });
         window.TrayIcon = _tray;
 
         window.Show();

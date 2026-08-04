@@ -174,3 +174,44 @@ A structured review after the initial tray/theme/installer work found and fixed:
 
 Each of these has a regression test named after the scenario in `tests/HostsManager.
 Tests/RegressionTests.cs`, so the fix is pinned rather than just narratively described.
+
+## The install experience: two things that looked fine and weren't
+
+Feedback after shipping `v1.0.0`: the installer visibly did nothing on completion, and
+the installed app was hard to find afterward. Both traced back to the same shortcut.
+
+- **The Start Menu shortcut used `Advertise="yes"`.** Advertised shortcuts resolve their
+  target through Windows Installer at launch time rather than pointing at the exe
+  directly, and Windows Search's app index doesn't reliably surface them as a launchable
+  app — the entry that *did* show up was Programs and Features, which reads as "only the
+  uninstaller is there." Switched to a plain shortcut with a real `Target`.
+- **The exit dialog had nothing to confirm.** `WixUI_InstallDir`'s stock Finish page is
+  just "click Finish to exit the wizard," with no indication anything was installed.
+  Added a checked-by-default "Launch Hosts manager" box, wired to a `WixShellExec`
+  custom action. Getting the reference right took a real build-and-inspect loop: the
+  natural-looking `<CustomActionRef Id="WixShellExec" />` doesn't resolve — the util
+  extension exposes the shell-exec entry point as a `DllEntry` on a versioned binary
+  (`Wix4UtilCA_$(sys.BUILDARCHSHORT)`), not as a standalone referenceable custom action,
+  so the fix defines a local `CustomAction` pointing at that `DllEntry` and publishes
+  *that* action's Id on the Finish button instead.
+
+Also fixed while in there: the shipped exe's `FileVersionInfo.ProductVersion` carried a
+`+<git-sha>` suffix the .NET SDK appends by default whenever the project builds inside a
+git repo, so the exe's own version disagreed with the clean `1.0.0` WiX puts in the MSI's
+`ProductVersion`. `Directory.Build.props` now sets
+`IncludeSourceRevisionInInformationalVersion=false` repo-wide, so every surface — the
+About dialog, Explorer's file Properties, the MSI — reports the same three-part number.
+
+## About dialog: reachable from the window and the tray
+
+Added a small info-glyph button in the header (next to the unsaved-changes indicator)
+and an "About" item in the tray menu, both opening the same dialog: name, version (read
+from the running exe's own `ProductVersion`, so it can never drift from what's actually
+installed), and a shortcut to the backups folder. The tray path has no window to own the
+dialog, so it re-uses `ShowMainWindow` first — clicking About from the tray brings the
+main window forward too, rather than popping a dialog with no visible owner.
+
+The dialog's height is `SizeToContent="Height"` rather than a fixed number — an earlier
+fixed-height version silently clipped the last line of the install-path box by a few
+pixels, invisible without owner-window screenshots since the containing `Border` doesn't
+report a layout error, it just runs out of room.

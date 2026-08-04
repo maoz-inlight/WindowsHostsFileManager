@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
   <!--
     One MSI per CPU architecture, built from the matching self-contained publish output.
@@ -44,12 +45,19 @@
         <File Id="HostsManagerExe"
               Source="$(SourceDir)\HostsManager.exe"
               KeyPath="yes">
+          <!--
+            Deliberately NOT Advertise="yes". Advertised shortcuts resolve their target
+            through the Windows Installer at launch time instead of pointing at the exe
+            directly, and Windows Search's app index doesn't always pick them up as a
+            launchable app — they can end up findable only via the Programs and Features
+            entry. A plain shortcut with a real target avoids that.
+          -->
           <Shortcut Id="StartMenuShortcut"
                     Directory="ProgramMenuFolder"
                     Name="Hosts manager"
                     Description="Add, remove and toggle hosts file entries"
                     Icon="AppIcon"
-                    Advertise="yes" />
+                    WorkingDirectory="INSTALLFOLDER" />
         </File>
       </Component>
 
@@ -70,6 +78,25 @@
 
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <WixVariable Id="WixUILicenseRtf" Value="$(SourceDir)\..\..\installer\License.rtf" />
+
+    <!--
+      Without this the wizard's Finish page just says "Click Finish to exit" with no
+      indication anything happened. This adds a checked-by-default "Launch Hosts manager"
+      box, so finishing the wizard also proves the install worked.
+    -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Hosts manager" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#HostsManagerExe]" />
+    <CustomAction Id="LaunchApplication"
+                  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  DllEntry="WixShellExec"
+                  Execute="immediate"
+                  Return="check" />
+
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
 
   </Package>
 </Wix>

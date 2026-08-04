@@ -46,6 +46,10 @@
                     <Ellipse Width="6" Height="6" Fill="{DynamicResource Accent}" Margin="8,0,0,0"
                              VerticalAlignment="Center"
                              Visibility="{Binding IsDirty, Converter={StaticResource BoolToVis}}" />
+                    <Button Style="{StaticResource IconButton}" Margin="10,0,0,0" Click="OnAbout"
+                            ToolTip="About Hosts manager">
+                        <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

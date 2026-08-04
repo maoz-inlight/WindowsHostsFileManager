@@ -27,6 +27,8 @@ that kind of corruption stays invisible until something stops resolving.
   toggle any domain without opening the app at all.
 - **Follows your Windows light/dark setting**, including the title bar, and switches live.
 - **Runs as a single instance**, so two copies can't fight over the same file.
+- **Shows its version in an About dialog** (the ⓘ icon in the header, or the tray menu),
+  read from the running exe so it always matches what's actually installed.
 
 ## Installing
 
@@ -81,7 +83,8 @@ build/HostsManager.exe --hosts-path C:\temp\hosts-copy --backups-dir C:\temp\bac
 
 Publishes every architecture and builds the installers into `dist`. Requires the WiX 5
 CLI (`dotnet tool install --global wix --version 5.0.2` plus
-`wix extension add -g WixToolset.UI.wixext/5.0.2`).
+`wix extension add -g WixToolset.UI.wixext/5.0.2` and
+`wix extension add -g WixToolset.Util.wixext/5.0.2`).
 
 .NET cannot emit one binary that runs on every CPU, so each architecture gets its own
 executable and installer.

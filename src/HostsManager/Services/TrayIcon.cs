@@ -17,16 +17,18 @@ public sealed class TrayIcon : IDisposable
     private readonly MainViewModel _viewModel;
     private readonly Action _showWindow;
     private readonly Action _exit;
+    private readonly Action _showAbout;
 
     // Built once. The menu is rebuilt on every open, and a font allocated per rebuild
     // would leak a GDI handle each time in an app designed to sit in the tray for days.
     private readonly Font _boldFont;
 
-    public TrayIcon(MainViewModel viewModel, Action showWindow, Action exit)
+    public TrayIcon(MainViewModel viewModel, Action showWindow, Action exit, Action showAbout)
     {
         _viewModel = viewModel;
         _showWindow = showWindow;
         _exit = exit;
+        _showAbout = showAbout;
         _boldFont = new Font(System.Drawing.SystemFonts.MenuFont!, System.Drawing.FontStyle.Bold);
 
         _icon = new NotifyIcon
@@ -83,6 +85,7 @@ public sealed class TrayIcon : IDisposable
             var (success, message) = DnsFlusher.Flush();
             ShowMessage(success ? "Hosts manager" : "Could not flush DNS", message);
         }));
+        menu.Items.Add(new ToolStripMenuItem("About", null, (_, _) => _showAbout()));
         menu.Items.Add(new ToolStripMenuItem("Exit", null, (_, _) => _exit()));
     }
 

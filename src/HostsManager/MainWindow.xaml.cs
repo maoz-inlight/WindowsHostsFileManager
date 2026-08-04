@@ -38,6 +38,16 @@ public partial class MainWindow : Window
         return dialog.ShowDialog() == true ? dialog.Result : null;
     }
 
+    private void OnAbout(object sender, RoutedEventArgs e) => ShowAbout();
+
+    /// <summary>Also called from the tray's "About" item, which has no dialog owner of its own.</summary>
+    public void ShowAbout()
+    {
+        var dialog = new AboutDialog(_vm.Writer.Backups.Directory) { Owner = this };
+        ThemeManager.Track(dialog);
+        dialog.ShowDialog();
+    }
+
     private void ShowBackupsDialog()
     {
         var dialog = new BackupsDialog(_vm.Writer) { Owner = this };

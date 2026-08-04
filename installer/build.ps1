@@ -83,6 +83,7 @@ foreach ($arch in $Architectures) {
         -define "SourceDir=$publishDir" `
         -define "Version=$Version" `
         -ext WixToolset.UI.wixext `
+        -ext WixToolset.Util.wixext `
         -pdbtype none `
         -out $msi
     if ($LASTEXITCODE -ne 0) { throw "wix build failed for $arch" }
