@@ -5,6 +5,9 @@ publish/
 dist/
 *.wixpdb
 
+# Unelevated rehearsal build (see "Administrator rights" in the README)
+build/
+
 # Rider / VS
 .vs/
 .idea/

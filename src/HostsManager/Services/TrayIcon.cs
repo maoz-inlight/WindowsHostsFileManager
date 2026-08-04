@@ -36,12 +36,29 @@ public sealed class TrayIcon : IDisposable
             Icon = LoadIcon(),
             Text = "Hosts manager",
             Visible = true,
+            // Kept only as a reliable right-click signal, never actually shown (Opening
+            // cancels it below). An icon sitting in the taskbar's hidden-icons overflow is
+            // reached through a different message path than a directly-visible one, and
+            // MouseUp's WM_RBUTTONUP doesn't reliably arrive there - ContextMenuStrip's own
+            // Opening event is what Windows forwards correctly through that overflow proxy
+            // regardless, since that's how the icon's right-click has always been wired.
+            ContextMenuStrip = new ContextMenuStrip(),
         };
 
         _icon.DoubleClick += (_, _) => _showWindow();
-        // ContextMenuStrip only ever auto-opened on right-click; matching that here since
-        // there is no built-in equivalent once the menu is a plain WPF window.
-        _icon.MouseUp += (_, e) => { if (e.Button == MouseButtons.Right) ShowMenu(); };
+        _icon.ContextMenuStrip!.Opening += (_, e) =>
+        {
+            e.Cancel = true;
+
+            // Capture now, while the click point is still accurate, but defer actually
+            // showing our window to the next dispatcher cycle. Cancelling from inside
+            // Opening happens while Explorer is still in the middle of its own teardown
+            // for this interaction (closing the hidden-icons overflow, in particular) -
+            // showing a window synchronously here races that and it can lose activation
+            // and close itself before it's ever visible.
+            var point = Cursor.Position;
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => ShowMenu(point)));
+        };
     }
 
     public void ShowMessage(string title, string body) =>
@@ -61,7 +78,7 @@ public sealed class TrayIcon : IDisposable
         return SystemIcons.Application;
     }
 
-    private void ShowMenu()
+    private void ShowMenu(System.Drawing.Point point)
     {
         // A stray second right-click while one is already open would otherwise stack a
         // new popup on top of it instead of replacing it.
@@ -69,7 +86,6 @@ public sealed class TrayIcon : IDisposable
 
         _menu = new TrayMenu(BuildRows());
 
-        var point = Cursor.Position;
         var workingArea = Screen.FromPoint(point).WorkingArea;
         _menu.ShowNear(point, workingArea);
     }
@@ -157,6 +173,7 @@ public sealed class TrayIcon : IDisposable
     {
         _menu?.Close();
         _icon.Visible = false;
+        _icon.ContextMenuStrip?.Dispose();
         _icon.Dispose();
     }
 }

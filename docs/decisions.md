@@ -286,12 +286,40 @@ values is `ShowNear`'s positioning math, which uses `System.Drawing.Point`/`Rect
 (passed in from `TrayIcon.cs`, which already deals in WinForms screen types) — no WPF
 control types touched there either.
 
-**Verified by screenshot, the hard way.** Windows 11's tray overflow flyout doesn't
-respond to synthetic `Invoke`/mouse input (confirmed: UI Automation's own `InvokePattern`
-and a real `SendInput`-level click at the flyout chevron's exact reported coordinates both
-did nothing visible), so driving it to test the new popup wasn't an option. Verified
-instead with a temporary `F9` hook wired straight to `TrayIcon.ShowMenu()` — bypassing the
-shell flyout entirely — screenshotted in both themes via `PrintWindow` on the popup's own
-handle (screen-coordinate capture kept reading wildly inconsistent virtual-desktop bounds
-across calls on this machine's mixed-DPI multi-monitor setup, so window-handle capture was
-the only reliable method), then removed before committing.
+### Two bugs the first round of "verification" completely missed
+
+Windows 11's tray overflow flyout doesn't respond to synthetic `Invoke`/mouse input (UI
+Automation's own `InvokePattern` and a real `SendInput`-level click at the flyout
+chevron's exact reported coordinates both did nothing), so the popup was first "verified"
+via a temporary `F9` hook wired straight to `ShowMenu()`, screenshotted with `PrintWindow`
+on the popup's handle. It looked perfect in both themes. It was also completely broken.
+
+**`PrintWindow` renders a window that isn't on screen.** It draws from the window's own
+device context, so a window positioned far outside the desktop bounds screenshots exactly
+like a visible one. The capture proved the popup's *styling* was right and proved nothing
+at all about whether it ever appeared — and it hadn't been appearing. The `F9` hook also
+sidestepped the real trigger path entirely, so it couldn't have caught the second bug
+either. Both only surfaced when the app was actually driven by hand from the tray.
+
+1. **Right-click never reached the app.** `NotifyIcon.MouseUp` doesn't reliably receive
+   `WM_RBUTTONUP` for an icon living in the hidden-icons overflow — the shell proxies that
+   click differently than one on a directly-visible icon. `ContextMenuStrip.Opening` *is*
+   forwarded correctly through the overflow, so a `ContextMenuStrip` is still attached
+   purely as a right-click signal, immediately cancelled (`e.Cancel = true`) and never
+   shown, with the real popup opened in its place. Showing it must also be deferred to the
+   next dispatcher cycle: doing it synchronously inside `Opening` races Explorer's own
+   teardown of the overflow flyout.
+
+2. **The popup opened off-screen on any scaled display.** `Cursor.Position` and
+   `Screen.WorkingArea` are physical pixels; WPF's `Left`/`Top` are device-independent
+   units. Assigning one to the other silently works at 100% scaling and fails everywhere
+   else. On the 150%-scaled monitor this was found on, the working area is 3840px wide but
+   only 2560 DIP — a click at physical X=3323 became DIP 3323, which Windows scaled to
+   ~4985 physical, roughly 1100px past the screen edge. Positioning now goes through
+   `GetWindowRect`/`SetWindowPos` so every value in the calculation is a physical pixel.
+
+Confirmed by adding temporary file tracing to the popup's lifecycle, right-clicking the
+real tray icon, and reading back the actual numbers (`area={3840x2088} size=345x236 ->
+3323,1623 IsVisible=True IsActive=True`) rather than trusting another screenshot. The
+lesson worth keeping: a UI screenshot taken through a path the user never exercises tests
+the rendering, not the feature.
