@@ -82,6 +82,17 @@ CLI (`dotnet tool install --global wix --version 5.0.2` plus
 .NET cannot emit one binary that runs on every CPU, so each architecture gets its own
 executable and installer.
 
+### Releasing an update
+
+Bump `<Version>` in [Directory.Build.props](Directory.Build.props) and run the build
+script again — that's the whole release process. All three installers share one
+`UpgradeCode`, so installing a build with a higher version over an existing install
+replaces it in place rather than adding a second entry in Programs and Features. To
+build a specific version without editing the file: `./installer/build.ps1 -Version 1.2.0`.
+
+Keep versions to three numeric parts (`Major.Minor.Build`) — Windows Installer ignores a
+fourth field when comparing versions, so a change there wouldn't register as an upgrade.
+
 ### Command line
 
 | Flag | Effect |

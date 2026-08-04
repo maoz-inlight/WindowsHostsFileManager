@@ -10,7 +10,7 @@
   -->
   <Package Name="Hosts manager"
            Manufacturer="Maoz Maroody"
-           Version="!(bind.FileVersion.HostsManagerExe)"
+           Version="$(Version)"
            UpgradeCode="7B1F4C2E-9A63-4D18-B5E7-2C8A1F6D3E90"
            Scope="perMachine"
            Compressed="yes">

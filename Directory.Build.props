@@ -1,0 +1,15 @@
+<Project>
+
+  <PropertyGroup>
+    <!--
+      Single source of truth for the release version. Bump this and run
+      installer/build.ps1 to ship an update — WiX compares it against the
+      installed version under the same UpgradeCode and replaces the prior
+      install rather than adding a second one. Keep it to three numeric
+      parts (Major.Minor.Build): Windows Installer ignores a fourth field
+      when deciding whether a version is an upgrade.
+    -->
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>

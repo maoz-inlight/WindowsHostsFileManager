@@ -50,6 +50,41 @@ its own light-grey track regardless of resources).
 `PublishSingleFile` was chosen over framework-dependent deployment so a recipient doesn't
 need a matching .NET runtime installed — the whole point of "an executable I can send."
 
+## Versioning: one number, flowing into the exe and the MSI together
+
+The upgrade mechanism (`MajorUpgrade`, a shared `UpgradeCode`) was in place from the
+first installer, but was inert: nothing set the exe's version explicitly, so every build
+defaulted to `1.0.0.0` and Windows Installer never saw a version increase to react to.
+
+`Directory.Build.props` at the repo root now holds the single `<Version>`, picked up
+automatically by every project under it (MSBuild convention — no per-project wiring
+needed). `installer/build.ps1` reads that value by default, or accepts `-Version` to
+override it without editing a file, and passes the *same* value explicitly to both
+`dotnet publish -p:Version=...` and `wix build -d Version=...` rather than letting the
+MSI bind to whatever the exe happened to embed. Explicit beats bound here: a build script
+that could fail silently if `dotnet publish` and `wix build` ever computed a version
+differently is worse than one where both were told the same number.
+
+The version is constrained to exactly three numeric parts (`Major.Minor.Build`) because
+Windows Installer only compares the first three fields of `ProductVersion` when deciding
+whether an install is an upgrade — a fourth field is accepted but silently ignored, which
+would make a `1.0.0.1` → `1.0.0.2` bump look like a no-op to the installer even though it
+built a different exe.
+
+**Verified without a live install**, since testing an elevated install/upgrade
+non-interactively isn't possible here: built `1.0.0` and `1.0.1` and inspected the raw
+MSI tables via the Windows Installer COM API rather than trusting the build succeeded.
+Confirmed the three facts that actually drive an upgrade: `UpgradeCode` identical across
+both, `ProductCode` different per build (WiX mints a fresh one automatically), and the
+generated `Upgrade` table carries the version-range rows `MajorUpgrade` is meant to
+produce — one unconditioned row bounded by `VersionMax` for detecting an older install,
+one bounded by `VersionMin` for detecting a newer one (the downgrade guard). Also
+confirmed `FindRelatedProducts` and `RemoveExistingProducts` are both present and
+unconditioned in `InstallExecuteSequence` — the actions that actually act on what
+`Upgrade` detects. All four are exactly what a live install/upgrade would depend on;
+reading them directly from the compiled MSI is the same check `msiexec` performs at
+install time, just done ahead of running it.
+
 ## Installer toolchain: WiX 5, not WiX 7
 
 WiX 7's CLI now requires accepting a paid Open Source Maintenance Fee EULA before it will
