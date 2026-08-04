@@ -1,0 +1,19 @@
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat{\fonttbl{\f0\fnil\fcharset0 Segoe UI;}}
+\viewkind4\uc1
+\pard\sa120\f0\fs20
+\b Hosts manager\b0\par
+\par
+This tool edits the Windows hosts file at %WINDIR%\\System32\\drivers\\etc\\hosts, which requires administrator rights. It is provided as is, without warranty of any kind.\par
+\par
+\b What it does to your system\b0\par
+\par
+Every save takes a backup first. Backups are stored under %LOCALAPPDATA%\\HostsManager\\backups and are left in place when the app is uninstalled, so you always keep a way back to a working hosts file. A copy of the hosts file as it was before the app first ran is kept permanently as hosts.original.bak.\par
+\par
+Blocks of the hosts file owned by other tools, such as Docker Desktop and Tailscale, are shown read-only and are never modified.\par
+\par
+The file's existing encoding and line endings are preserved exactly.\par
+\par
+\b Uninstalling\b0\par
+\par
+Uninstalling removes the application only. It does not revert changes already made to your hosts file, and it does not delete your backups. To restore the original hosts file, use the Backups window before uninstalling, or copy hosts.original.bak over the hosts file from an elevated Command Prompt.\par
+}

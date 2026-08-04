@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <!--
+    One MSI per CPU architecture, built from the matching self-contained publish output.
+    The UpgradeCode is shared across architectures on purpose: it is one product, and a
+    machine only ever installs the build that matches its CPU, so installing over an
+    earlier version replaces it rather than stacking up entries in Programs and Features.
+  -->
+  <Package Name="Hosts manager"
+           Manufacturer="Maoz Maroody"
+           Version="!(bind.FileVersion.HostsManagerExe)"
+           UpgradeCode="7B1F4C2E-9A63-4D18-B5E7-2C8A1F6D3E90"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <SummaryInformation Description="Manage the Windows hosts file: add, remove and toggle domain overrides." />
+
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of Hosts manager is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="AppIcon" SourceFile="$(SourceDir)\..\..\src\HostsManager\Assets\app.ico" />
+    <!-- ARPNOMODIFY is already set by WixUI_InstallDir. -->
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+
+    <!--
+      The app writes the hosts file, so it needs Windows 7 or later at minimum; the real
+      floor is whatever the bundled .NET runtime supports.
+    -->
+    <Launch Condition="Installed OR VersionNT &gt;= 601"
+            Message="Hosts manager requires Windows 7 or later." />
+
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="Hosts manager" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="MainExecutable" Guid="*">
+        <File Id="HostsManagerExe"
+              Source="$(SourceDir)\HostsManager.exe"
+              KeyPath="yes">
+          <Shortcut Id="StartMenuShortcut"
+                    Directory="ProgramMenuFolder"
+                    Name="Hosts manager"
+                    Description="Add, remove and toggle hosts file entries"
+                    Icon="AppIcon"
+                    Advertise="yes" />
+        </File>
+      </Component>
+
+      <Component Id="ReadmeFile" Guid="*">
+        <File Id="ReadmeMd" Source="$(SourceDir)\..\..\README.md" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="Hosts manager" Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+    <!--
+      Backups live in %LOCALAPPDATA%\HostsManager and are deliberately NOT registered
+      with the installer, so uninstalling never removes a user's way back to a working
+      hosts file.
+    -->
+
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(SourceDir)\..\..\installer\License.rtf" />
+
+  </Package>
+</Wix>

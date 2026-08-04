@@ -1,0 +1,14 @@
+# Build outputs
+bin/
+obj/
+publish/
+dist/
+*.wixpdb
+
+# Rider / VS
+.vs/
+.idea/
+*.user
+
+# OS
+Thumbs.db

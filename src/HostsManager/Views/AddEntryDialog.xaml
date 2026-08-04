@@ -1,0 +1,37 @@
+﻿<Window x:Class="HostsManager.Views.AddEntryDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Add entry" Width="440" SizeToContent="Height" ResizeMode="NoResize" Icon="../Assets/app.ico"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource Surface0}"
+        FontFamily="{StaticResource UiFont}" ShowInTaskbar="False">
+
+    <StackPanel Margin="20">
+        <TextBlock Text="Domain" FontSize="12" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,5" />
+        <TextBox x:Name="DomainBox" Style="{StaticResource FlatTextBox}" TextChanged="OnChanged" />
+        <TextBlock Text="Separate multiple domains with spaces." FontSize="11"
+                   Foreground="{DynamicResource TextMuted}" Margin="0,5,0,0" />
+
+        <TextBlock Text="Maps to" FontSize="12" Foreground="{DynamicResource TextSecondary}" Margin="0,16,0,5" />
+        <TextBox x:Name="IpBox" Style="{StaticResource FlatTextBox}" Text="127.0.0.1" TextChanged="OnChanged" />
+
+        <TextBlock Text="Comment (optional)" FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                   Margin="0,16,0,5" />
+        <TextBox x:Name="CommentBox" Style="{StaticResource FlatTextBox}" TextChanged="OnChanged" />
+
+        <Border x:Name="ErrorBox" Background="{DynamicResource DangerBg}" CornerRadius="6" Padding="10,8"
+                Margin="0,16,0,0" Visibility="Collapsed">
+            <TextBlock x:Name="ErrorText" FontSize="12" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" />
+        </Border>
+
+        <Border Background="{DynamicResource Surface1}" CornerRadius="6" Padding="10,8" Margin="0,16,0,0">
+            <TextBlock x:Name="PreviewText" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                       Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
+        </Border>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="Cancel" Style="{StaticResource ToolButton}" Padding="16,7" IsCancel="True" />
+            <Button x:Name="AddButton" Content="Add" Style="{StaticResource PrimaryButton}" Padding="20,7"
+                    Margin="6,0,0,0" IsDefault="True" Click="OnAdd" />
+        </StackPanel>
+    </StackPanel>
+</Window>

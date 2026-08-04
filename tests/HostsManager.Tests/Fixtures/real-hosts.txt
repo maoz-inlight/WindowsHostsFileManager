@@ -1,0 +1,56 @@
+﻿# Copyright (c) 1993-2009 Microsoft Corp.
+#
+# This is a sample HOSTS file used by Microsoft TCP/IP for Windows.
+#
+# This file contains the mappings of IP addresses to host names. Each
+# entry should be kept on an individual line. The IP address should
+# be placed in the first column followed by the corresponding host name.
+# The IP address and the host name should be separated by at least one
+# space.
+#
+# Additionally, comments (such as these) may be inserted on individual
+# lines or following the machine name denoted by a '#' symbol.
+#
+# For example:
+#
+#      102.54.94.97     rhino.acme.com          # source server
+#       38.25.63.10     x.acme.com              # x client host
+
+# localhost name resolution is handled within DNS itself.
+#	127.0.0.1       localhost
+#	::1             localhost
+#127.0.0.1 broker.eventscalendar.co
+#127.0.0.1 ics.eventscalendar.co
+#127.0.0.1 inffuse.eventscalendar.co
+#127.0.0.1 inffuse-platform.appspot.com
+#127.0.0.1 dashboard.eventscalendar.co
+#127.0.0.1 dashboard-shopify.eventscalendar.co
+#127.0.0.1  dashboard.getpraise.com
+#127.0.0.1  dashboard.getpraise.co
+#127.0.0.1 dist.eventscalendar.co
+
+127.0.0.1 ics.local
+127.0.0.1 broker.local
+
+
+
+
+
+i see only white now , i don't see the top layer color , nor the peeling , though i do see the triggers log , what i asked was
+
+again , all the area should be painted with the top layer color , when i start "peeling" in the touching points i should see the second layer color and so on .. until i see the button layer color. the area i did not touch sould stay with the top layer color
+
+# Added by Docker Desktop
+192.168.68.108 host.docker.internal
+192.168.68.108 gateway.docker.internal
+# To allow the same kube context to work on the host and the container:
+127.0.0.1 kubernetes.docker.internal
+# End of section
+# TailscaleHostsSectionStart
+# This section contains MagicDNS entries for Tailscale.
+# Do not edit this section manually.
+
+100.71.193.22 maozs-mac-mini.tail772ce4.ts.net. maozs-mac-mini
+100.70.114.122 surfacedragon.tail772ce4.ts.net. surfacedragon
+
+# TailscaleHostsSectionEnd

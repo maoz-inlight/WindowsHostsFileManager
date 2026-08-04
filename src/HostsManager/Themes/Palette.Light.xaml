@@ -1,0 +1,37 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Light palette. Every key here has a counterpart in Palette.Dark.xaml; the two are
+        swapped wholesale at runtime, so the keys must stay in sync.
+    -->
+
+    <SolidColorBrush x:Key="Surface0" Color="#FAF9F7" />
+    <SolidColorBrush x:Key="Surface1" Color="#F4F3EF" />
+    <SolidColorBrush x:Key="Surface2" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="Border0" Color="#E5E3DE" />
+    <SolidColorBrush x:Key="BorderStrong" Color="#D3D1C7" />
+
+    <SolidColorBrush x:Key="TextPrimary" Color="#2C2C2A" />
+    <SolidColorBrush x:Key="TextSecondary" Color="#5F5E5A" />
+    <SolidColorBrush x:Key="TextMuted" Color="#8B8A83" />
+
+    <SolidColorBrush x:Key="Accent" Color="#185FA5" />
+    <SolidColorBrush x:Key="AccentBg" Color="#E6F1FB" />
+    <SolidColorBrush x:Key="AccentBorder" Color="#B5D4F4" />
+
+    <SolidColorBrush x:Key="Success" Color="#0F6E56" />
+    <SolidColorBrush x:Key="SuccessBg" Color="#E1F5EE" />
+    <SolidColorBrush x:Key="SuccessFill" Color="#1D9E75" />
+
+    <SolidColorBrush x:Key="Danger" Color="#A32D2D" />
+    <SolidColorBrush x:Key="DangerBg" Color="#FCEBEB" />
+
+    <SolidColorBrush x:Key="Warning" Color="#854F0B" />
+    <SolidColorBrush x:Key="WarningBg" Color="#FAEEDA" />
+    <SolidColorBrush x:Key="WarningBorder" Color="#FAC775" />
+
+    <SolidColorBrush x:Key="ToggleTrackOff" Color="#D3D1C7" />
+    <SolidColorBrush x:Key="ToggleThumb" Color="#FFFFFF" />
+
+</ResourceDictionary>

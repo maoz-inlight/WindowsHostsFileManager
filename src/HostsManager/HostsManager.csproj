@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\HostsManager.Core\HostsManager.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- For the tray NotifyIcon, which WPF has no equivalent of. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <!--
+      Shipping builds require elevation to write the real hosts file. Setting the
+      NoElevation property drops the manifest, so the app can be rehearsed unelevated
+      against a copy passed on the command line.
+    -->
+    <ApplicationManifest Condition="'$(NoElevation)' != 'true'">app.manifest</ApplicationManifest>
+    <AssemblyName>HostsManager</AssemblyName>
+    <RootNamespace>HostsManager</RootNamespace>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <!--
+      WFAC010 asks for DPI settings to move out of the manifest into a WinForms project
+      property. This is a WPF app that only borrows WinForms for the tray NotifyIcon, so
+      the manifest is the right place and stays.
+    -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+</Project>
