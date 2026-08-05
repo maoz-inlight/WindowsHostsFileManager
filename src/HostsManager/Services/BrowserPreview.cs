@@ -17,6 +17,10 @@ public sealed record ChromiumBrowser(
 public sealed class BrowserPreviewSession : IDisposable
 {
     private readonly Process _process;
+    private readonly System.Threading.Timer _windowMonitor;
+    private int _sawWindow;
+    private int _ended;
+    private int _disposed;
 
     internal BrowserPreviewSession(Process process, ChromiumBrowser browser, string description)
     {
@@ -24,8 +28,15 @@ public sealed class BrowserPreviewSession : IDisposable
         Browser = browser;
         Description = description;
 
+        _windowMonitor = new System.Threading.Timer(
+            CheckWindow, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _process.Exited += OnProcessExited;
         _process.EnableRaisingEvents = true;
-        _process.Exited += OnExited;
+
+        // Chromium can keep its process alive after its last window closes. Watch the
+        // window as well as the process so the app does not show a stale active preview.
+        _windowMonitor.Change(TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
+        CheckWindow(null);
     }
 
     public ChromiumBrowser Browser { get; }
@@ -39,19 +50,81 @@ public sealed class BrowserPreviewSession : IDisposable
         }
     }
 
-    public event Action? Exited;
+    public bool HasVisibleWindow
+    {
+        get
+        {
+            if (HasExited) return false;
+
+            try
+            {
+                _process.Refresh();
+                return _process.MainWindowHandle != IntPtr.Zero;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+    }
+
+    public bool IsEnded =>
+        Volatile.Read(ref _ended) != 0
+        || HasExited
+        || (Volatile.Read(ref _sawWindow) != 0 && !HasVisibleWindow);
+
+    public event Action? Ended;
 
     public bool RequestClose()
     {
-        try { return HasExited || _process.CloseMainWindow(); }
-        catch (InvalidOperationException) { return true; }
+        if (IsEnded)
+        {
+            SignalEnded();
+            return true;
+        }
+
+        try { return _process.CloseMainWindow(); }
+        catch (InvalidOperationException)
+        {
+            SignalEnded();
+            return true;
+        }
     }
 
-    private void OnExited(object? sender, EventArgs e) => Exited?.Invoke();
+    private void CheckWindow(object? state)
+    {
+        if (HasExited)
+        {
+            SignalEnded();
+            return;
+        }
+
+        if (HasVisibleWindow)
+        {
+            Volatile.Write(ref _sawWindow, 1);
+            return;
+        }
+
+        if (Volatile.Read(ref _sawWindow) != 0) SignalEnded();
+    }
+
+    private void OnProcessExited(object? sender, EventArgs e) => SignalEnded();
+
+    private void SignalEnded()
+    {
+        if (Interlocked.Exchange(ref _ended, 1) != 0) return;
+
+        try { _windowMonitor.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan); }
+        catch (ObjectDisposedException) { }
+        Ended?.Invoke();
+    }
 
     public void Dispose()
     {
-        _process.Exited -= OnExited;
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+        _process.Exited -= OnProcessExited;
+        _windowMonitor.Dispose();
         _process.Dispose();
     }
 }
@@ -97,7 +170,7 @@ public sealed class BrowserPreviewService : IDisposable
     public BrowserPreviewSession Launch(ChromiumBrowser browser,
         IReadOnlyList<BrowserOverride> overrides, IReadOnlyList<Uri> startUris)
     {
-        if (_active is { HasExited: false })
+        if (_active is { IsEnded: false })
             throw new InvalidOperationException(
                 "An isolated browser is already running. Close it before starting a different preview.");
 
@@ -125,6 +198,7 @@ public sealed class BrowserPreviewService : IDisposable
             $"--host-resolver-rules={rules}",
             "--no-first-run",
             "--no-default-browser-check",
+            "--disable-background-mode",
             "--new-window",
         };
         arguments.AddRange(startUris.Select(uri => uri.AbsoluteUri));
@@ -140,11 +214,19 @@ public sealed class BrowserPreviewService : IDisposable
                 : $"{distinctHosts} domains across {distinctTargets} targets";
 
         var session = new BrowserPreviewSession(process, browser, description);
-        session.Exited += () =>
+        session.Ended += () =>
         {
             if (ReferenceEquals(_active, session)) _active = null;
         };
         _active = session;
+
+        if (session.IsEnded)
+        {
+            _active = null;
+            session.Dispose();
+            throw new InvalidOperationException("The isolated browser exited before its window opened.");
+        }
+
         return session;
     }
 
