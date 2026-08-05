@@ -55,10 +55,51 @@ public class BrowserOverrideRulesTests
         var rules = BrowserOverrideRules.Build(new[]
         {
             new BrowserOverride("API.local", IPAddress.Loopback),
-            new BrowserOverride("api.LOCAL", IPAddress.Parse("192.168.1.20")),
+            new BrowserOverride("api.LOCAL", IPAddress.Loopback),
         });
 
         Assert.Equal("MAP API.local 127.0.0.1", rules);
+    }
+
+    [Fact]
+    public void FromLines_CombinesMappingsFromEverySelectedEntry()
+    {
+        var doc = HostsFileParser.Parse(
+            "127.0.0.1 app.local\r\n192.168.1.20 api.local cdn.local\r\n",
+            FileFormat.Default);
+
+        var result = BrowserOverrideRules.FromLines(doc.Entries);
+
+        Assert.Equal(new[] { "app.local", "api.local", "cdn.local" },
+            result.Select(mapping => mapping.Hostname));
+        Assert.Equal(IPAddress.Loopback, result[0].Target);
+        Assert.Equal(IPAddress.Parse("192.168.1.20"), result[1].Target);
+        Assert.Equal(IPAddress.Parse("192.168.1.20"), result[2].Target);
+    }
+
+    [Fact]
+    public void FromLines_RejectsConflictingMappingsForTheSameHostname()
+    {
+        var doc = HostsFileParser.Parse(
+            "127.0.0.1 api.local\r\n192.168.1.20 API.local\r\n",
+            FileFormat.Default);
+
+        var error = Assert.Throws<ArgumentException>(() =>
+            BrowserOverrideRules.FromLines(doc.Entries));
+
+        Assert.Contains("maps to both", error.Message);
+    }
+
+    [Fact]
+    public void Build_RejectsConflictingMappingsForTheSameHostname()
+    {
+        var error = Assert.Throws<ArgumentException>(() => BrowserOverrideRules.Build(new[]
+        {
+            new BrowserOverride("api.local", IPAddress.Loopback),
+            new BrowserOverride("API.local", IPAddress.Parse("192.168.1.20")),
+        }));
+
+        Assert.Contains("cannot map to both", error.Message);
     }
 
     [Fact]

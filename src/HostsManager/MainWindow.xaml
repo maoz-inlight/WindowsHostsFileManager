@@ -88,10 +88,10 @@
                                           Command="{Binding BackupsCommand}" />
                                 <MenuItem Header="Flush DNS cache" Style="{StaticResource OverflowMenuItem}"
                                           Command="{Binding FlushDnsCommand}" />
-                                <MenuItem Header="Open selected in isolation…"
+                                <MenuItem Header="{Binding OpenIsolatedBrowserText}"
                                           Style="{StaticResource OverflowMenuItem}"
                                           Command="{Binding OpenIsolatedBrowserCommand}"
-                                          ToolTip="Open the selected domain in a browser without changing Windows DNS" />
+                                          ToolTip="Open the selected domains in a browser without changing Windows DNS" />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
@@ -158,14 +158,25 @@
         <!-- Entries -->
         <DataGrid Grid.Row="6" x:Name="EntryGrid" ItemsSource="{Binding EntriesView}"
                   SelectedItem="{Binding SelectedEntry}"
+                  SelectionChanged="OnEntrySelectionChanged"
+                  PreviewMouseRightButtonDown="OnEntryGridPreviewMouseRightButtonDown"
+                  ContextMenuOpening="OnEntryGridContextMenuOpening"
                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserResizeRows="False" CanUserReorderColumns="False"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                   HorizontalGridLinesBrush="{DynamicResource Border0}"
                   Background="{DynamicResource Surface2}" BorderThickness="0" RowHeight="34"
                   ColumnHeaderStyle="{StaticResource GridColumnHeader}" CellStyle="{StaticResource GridCell}"
-                  SelectionMode="Single" IsReadOnly="True"
+                  SelectionMode="Extended" IsReadOnly="True"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+
+            <DataGrid.ContextMenu>
+                <ContextMenu Style="{StaticResource OverflowMenu}">
+                    <MenuItem Header="{Binding OpenIsolatedBrowserText}"
+                              Style="{StaticResource OverflowMenuItem}"
+                              Command="{Binding OpenIsolatedBrowserCommand}" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
 
             <DataGrid.RowStyle>
                 <!-- Selection styling lives in GridRow, shared with the backups grid. -->

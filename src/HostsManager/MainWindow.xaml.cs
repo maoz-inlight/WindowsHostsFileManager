@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using HostsManager.Services;
 using HostsManager.ViewModels;
 using HostsManager.Views;
@@ -35,7 +36,7 @@ public partial class MainWindow : Window
         Loaded += (_, _) => vm.Initialize();
     }
 
-    private void OpenIsolatedBrowser(EntryViewModel entry)
+    private void OpenIsolatedBrowser(IReadOnlyList<EntryViewModel> entries)
     {
         try
         {
@@ -47,11 +48,15 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var dialog = new BrowserPreviewDialog(entry.Line, browsers) { Owner = this };
+            var dialog = new BrowserPreviewDialog(entries.Select(entry => entry.Line).ToArray(), browsers)
+            {
+                Owner = this,
+            };
             ThemeManager.Track(dialog);
             if (dialog.ShowDialog() != true) return;
 
-            var session = _browserPreview.Launch(dialog.SelectedBrowser, dialog.Overrides, dialog.StartUri);
+            var session = _browserPreview.Launch(
+                dialog.SelectedBrowser, dialog.Overrides, dialog.SelectedStartUris);
             _browserSession = session;
             _vm.SetBrowserPreview(session.Description);
 
@@ -104,6 +109,7 @@ public partial class MainWindow : Window
     {
         if (MoreButton.ContextMenu is not { } menu) return;
 
+        menu.DataContext = _vm;
         menu.PlacementTarget = MoreButton;
         menu.IsOpen = true;
     }
@@ -136,6 +142,32 @@ public partial class MainWindow : Window
             2 => EntryFilter.Problems,
             _ => EntryFilter.All,
         };
+    }
+
+    private void OnEntrySelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+
+        var selected = EntryGrid.Items
+            .OfType<EntryViewModel>()
+            .Where(entry => EntryGrid.SelectedItems.Contains(entry));
+        vm.SetSelectedEntries(selected);
+    }
+
+    private void OnEntryGridPreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var row = ItemsControl.ContainerFromElement(
+            EntryGrid, e.OriginalSource as DependencyObject) as DataGridRow;
+        if (row is null || row.IsSelected) return;
+
+        EntryGrid.SelectedItems.Clear();
+        row.IsSelected = true;
+        EntryGrid.SelectedItem = row.Item;
+    }
+
+    private void OnEntryGridContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (EntryGrid.ContextMenu is { } menu) menu.DataContext = _vm;
     }
 
     /// <summary>Set once so the tray's Exit can close the window for real.</summary>

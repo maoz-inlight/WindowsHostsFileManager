@@ -135,10 +135,13 @@ fourth field when comparing versions, so a change there wouldn't register as an 
 
 ## Isolated browser preview
 
-Select any valid entry — active, disabled, or read-only — and choose **Open isolated**.
-Hosts manager launches Edge or Chrome with a dedicated browser profile and resolver rules
-for every hostname on that entry. This is useful for opening a production hostname against
-a local or staging server while the rest of the machine continues using normal DNS.
+Select any valid entry — active, disabled, or read-only — or use Ctrl/Shift to select
+several. Right-click the selection or use the toolbar's overflow menu and choose **Open in
+isolation**. Hosts manager launches one Edge or Chrome window with a dedicated browser
+profile, a tab for every checked start page, and resolver rules for every hostname on the
+selected entries. Conflicting mappings for the same hostname are refused rather than
+silently choosing one. This is useful for opening production hostnames against local or
+staging servers while the rest of the machine continues using normal DNS.
 
 The preview never writes the hosts file and never disables certificate validation. The URL
 hostname is preserved, so the target server still needs to present the correct HTTPS

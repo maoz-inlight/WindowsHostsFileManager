@@ -95,14 +95,18 @@ public sealed class BrowserPreviewService : IDisposable
     }
 
     public BrowserPreviewSession Launch(ChromiumBrowser browser,
-        IReadOnlyList<BrowserOverride> overrides, Uri startUri)
+        IReadOnlyList<BrowserOverride> overrides, IReadOnlyList<Uri> startUris)
     {
         if (_active is { HasExited: false })
             throw new InvalidOperationException(
                 "An isolated browser is already running. Close it before starting a different preview.");
 
-        if (startUri.Scheme is not ("http" or "https"))
-            throw new ArgumentException("The preview URL must start with http:// or https://.", nameof(startUri));
+        if (startUris.Count == 0)
+            throw new ArgumentException("Select at least one URL to open.", nameof(startUris));
+
+        if (startUris.Any(uri => uri.Scheme is not ("http" or "https")))
+            throw new ArgumentException(
+                "Every preview URL must start with http:// or https://.", nameof(startUris));
 
         _active?.Dispose();
         _active = null;
@@ -115,22 +119,25 @@ public sealed class BrowserPreviewService : IDisposable
             "HostsManager", "browser-preview", browser.Kind.ToString().ToLowerInvariant(), profileKey);
         Directory.CreateDirectory(profile);
 
-        var arguments = new[]
+        var arguments = new List<string>
         {
             $"--user-data-dir={profile}",
             $"--host-resolver-rules={rules}",
             "--no-first-run",
             "--no-default-browser-check",
             "--new-window",
-            startUri.AbsoluteUri,
         };
+        arguments.AddRange(startUris.Select(uri => uri.AbsoluteUri));
 
         var process = UnelevatedProcessLauncher.Start(browser.ExecutablePath, arguments);
         var distinctHosts = overrides.Select(o => o.Hostname)
             .Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        var distinctTargets = overrides.Select(o => o.Target).Distinct().Count();
         var description = distinctHosts == 1
             ? $"{overrides[0].Hostname} → {overrides[0].Target}"
-            : $"{distinctHosts} domains → {overrides[0].Target}";
+            : distinctTargets == 1
+                ? $"{distinctHosts} domains → {overrides[0].Target}"
+                : $"{distinctHosts} domains across {distinctTargets} targets";
 
         var session = new BrowserPreviewSession(process, browser, description);
         session.Exited += () =>

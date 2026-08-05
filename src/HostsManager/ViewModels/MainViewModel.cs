@@ -40,7 +40,7 @@ public sealed class MainViewModel : Observable, IDisposable
         ShowProblemsCommand = new RelayCommand(() => Filter = EntryFilter.Problems);
         DeleteRowCommand = new RelayCommand(o => DeleteEntry(o as EntryViewModel));
         OpenIsolatedBrowserCommand = new RelayCommand(OpenIsolatedBrowser,
-            () => SelectedEntry?.Line.IsEntry == true);
+            () => SelectedEntries.Count > 0);
         EndBrowserPreviewCommand = new RelayCommand(() => EndBrowserPreview?.Invoke(),
             () => IsBrowserPreviewActive);
     }
@@ -51,7 +51,7 @@ public sealed class MainViewModel : Observable, IDisposable
     public Action? ShowBackups { get; set; }
     public Func<string, string, bool>? Confirm { get; set; }
     public Action<string, string>? ShowError { get; set; }
-    public Action<EntryViewModel>? RequestOpenIsolatedBrowser { get; set; }
+    public Action<IReadOnlyList<EntryViewModel>>? RequestOpenIsolatedBrowser { get; set; }
     public Action? EndBrowserPreview { get; set; }
 
     // ---- state ------------------------------------------------------------
@@ -85,6 +85,26 @@ public sealed class MainViewModel : Observable, IDisposable
     {
         get => _selectedEntry;
         set => Set(ref _selectedEntry, value);
+    }
+
+    private IReadOnlyList<EntryViewModel> _selectedEntries = Array.Empty<EntryViewModel>();
+    public IReadOnlyList<EntryViewModel> SelectedEntries => _selectedEntries;
+
+    public string OpenIsolatedBrowserText => SelectedEntries.Count switch
+    {
+        > 1 => $"Open {SelectedEntries.Count} entries in isolation…",
+        _ => "Open selected in isolation…",
+    };
+
+    public void SetSelectedEntries(IEnumerable<EntryViewModel> entries)
+    {
+        _selectedEntries = entries
+            .Where(entry => entry.Line.IsEntry)
+            .Distinct()
+            .ToArray();
+        Raise(nameof(SelectedEntries));
+        Raise(nameof(OpenIsolatedBrowserText));
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
     }
 
     private bool _isBrowserPreviewActive;
@@ -185,8 +205,8 @@ public sealed class MainViewModel : Observable, IDisposable
 
     private void OpenIsolatedBrowser()
     {
-        if (SelectedEntry?.Line.IsEntry == true)
-            RequestOpenIsolatedBrowser?.Invoke(SelectedEntry);
+        if (SelectedEntries.Count > 0)
+            RequestOpenIsolatedBrowser?.Invoke(SelectedEntries);
     }
 
     public void SetBrowserPreview(string description)
@@ -241,6 +261,7 @@ public sealed class MainViewModel : Observable, IDisposable
         {
             var doc = _writer.Load();
 
+            SetSelectedEntries(Array.Empty<EntryViewModel>());
             Entries.Clear();
             var shadowed = doc.FindShadowedEntries().ToHashSet();
 
