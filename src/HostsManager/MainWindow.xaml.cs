@@ -96,6 +96,18 @@ public partial class MainWindow : Window
 
     private void OnAbout(object sender, RoutedEventArgs e) => ShowAbout();
 
+    /// <summary>
+    /// Opens the overflow menu under the button. PlacementTarget has to be set by hand
+    /// because a left-click open skips the plumbing ContextMenuService does on right-click.
+    /// </summary>
+    private void OnMore(object sender, RoutedEventArgs e)
+    {
+        if (MoreButton.ContextMenu is not { } menu) return;
+
+        menu.PlacementTarget = MoreButton;
+        menu.IsOpen = true;
+    }
+
     /// <summary>Also called from the tray's "About" item, which has no dialog owner of its own.</summary>
     public void ShowAbout()
     {

@@ -30,16 +30,33 @@
     <!--
       Windows 11 or later, by choice rather than by technical floor: the bundled .NET 8
       runtime would also run on Windows 10 1607+, but this is only developed and tested
-      against Windows 11, so the installer refuses rather than shipping onto something
-      untested. The previous "VersionNT >= 601" let it install on Windows 7, which .NET 8
-      cannot run on at all.
+      against Windows 11.
 
-      VersionNT is 1000 for every Windows 10 and 11 build (verified by reading the property
-      out of this MSI on a build-26200 machine - the often-cited 603 cap does not apply
-      here), so it can't distinguish 10 from 11 on its own. WindowsBuild is what does:
-      22000 is the first Windows 11 release.
+      Do NOT use VersionNT or WindowsBuild here. msiexec.exe is not manifested for Windows
+      10/11, so GetVersionEx shims it: on a real Windows 11 build-26200 machine it reports
+      VersionNT=603 and WindowsBuild=9600 - Windows 8.1's numbers. Reading those same
+      properties through the WindowsInstaller COM API from a manifested process returns the
+      true 1000/26200, which is how an earlier version of this condition passed testing and
+      then rejected every actual machine it ran on.
+
+      The registry is not shimmed, so the build number comes from there. It is compared as
+      a string because MSI evaluates any string-to-integer comparison as false; that is
+      safe here because every Windows 10 (10240-19045) and Windows 11 (22000+) build number
+      is five digits, so lexicographic order matches numeric order. Revisit if build
+      numbers ever reach six digits.
+
+      If the search finds nothing the property is empty, "" >= "22000" is false, and the
+      install is refused - failing closed rather than open.
     -->
-    <Launch Condition="Installed OR (VersionNT &gt;= 1000 AND WindowsBuild &gt;= 22000)"
+    <Property Id="WINDOWSBUILDNUMBER" Secure="yes">
+      <RegistrySearch Id="CurrentBuildNumber"
+                      Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentBuildNumber"
+                      Type="raw" />
+    </Property>
+
+    <Launch Condition="Installed OR (WINDOWSBUILDNUMBER &gt;= &quot;22000&quot;)"
             Message="Hosts manager requires Windows 11 or later." />
 
     <StandardDirectory Id="ProgramFiles6432Folder">

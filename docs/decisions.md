@@ -334,12 +334,31 @@ The install would succeed and the app would then fail to start. The floor is now
 11, which is higher than .NET 8 strictly requires (it supports Windows 10 1607+) and is a
 deliberate choice: this is only developed and tested against Windows 11.
 
-`VersionNT` alone can't express that. Reading the property out of the built MSI on this
-machine gives `VersionNT = 1000, WindowsBuild = 26200` — so `VersionNT` is 1000 for *every*
-Windows 10 and 11 build and can't tell them apart (the widely-repeated "VersionNT caps at
-603" does not apply to a current Windows Installer). `WindowsBuild >= 22000` is what
-actually distinguishes Windows 11. Verified by compiling the condition and evaluating it
-against both the real machine and simulated older build numbers rather than assuming.
+**Do not use `VersionNT` or `WindowsBuild` for this.** `msiexec.exe` is not manifested for
+Windows 10/11, so `GetVersionEx` shims it: on a real Windows 11 build-26200 machine it
+reports `VersionNT = 603` and `WindowsBuild = 9600` — Windows 8.1's numbers. The build
+number comes from `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\CurrentBuildNumber`
+instead, which isn't shimmed. That key is shared rather than WOW64-redirected, so the same
+search works from the x86 package (verified, not assumed).
+
+It's compared as a string, because MSI evaluates any string-to-integer comparison as
+false. That's safe only because every Windows 10 (10240–19045) and Windows 11 (22000+)
+build number is five digits, so lexicographic order matches numeric order — worth
+revisiting if build numbers ever reach six digits. An empty result fails the comparison,
+so a failed search refuses the install rather than waving it through.
+
+**How the first attempt shipped broken.** The original condition was
+`VersionNT >= 1000 AND WindowsBuild >= 22000`, "verified" by opening the built MSI through
+the `WindowsInstaller` COM API from PowerShell and evaluating the condition there. That
+returned the *true* `1000/26200` and passed — because an in-process COM call runs under
+**PowerShell's** manifest, which is Windows 10+ aware, while the actual install runs under
+**msiexec's**, which isn't. v1.0.3 shipped a gate that rejected every machine on earth,
+including the Windows 11 box it was "tested" on.
+
+Exactly the same failure shape as the `PrintWindow` tray-menu bug above: a check performed
+through a path the real user never takes. The fix both times was to drive the genuine path
+— here, `msiexec /i … /qn /l*v` and reading `Property(S):` out of the verbose log, which is
+now how any change to this condition gets checked.
 
 ### One write path, so save and restore can't diverge
 
