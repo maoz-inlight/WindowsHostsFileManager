@@ -12,6 +12,9 @@ rem   release.bat 1.0.5 -SkipTests
 rem
 rem Needs the WiX 5 CLI (see the README) and an authenticated gh.
 
+rem Captured before the first shift: shift moves %0 too, so %~dp0 stops naming this file.
+set "HERE=%~dp0"
+
 set "VERSION=%~1"
 if "%VERSION%"=="" goto usage
 
@@ -27,7 +30,7 @@ shift
 goto collect
 
 :run
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0installer\release.ps1" -Version %VERSION%%REST%
+powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE%installer\release.ps1" -Version %VERSION%%REST%
 exit /b %errorlevel%
 
 :usage
