@@ -60,15 +60,9 @@ public partial class MainWindow : Window
             _browserSession = session;
             _vm.SetBrowserPreview(session.Description);
 
-            session.Exited += () => Dispatcher.InvokeAsync(() =>
+            session.Ended += () => Dispatcher.InvokeAsync(() =>
             {
-                if (ReferenceEquals(_browserSession, session))
-                {
-                    _browserSession = null;
-                    _vm.ClearBrowserPreview();
-                }
-
-                session.Dispose();
+                ClearBrowserSession(session);
             });
         }
         catch (Exception ex)
@@ -80,16 +74,32 @@ public partial class MainWindow : Window
 
     private void EndBrowserPreview()
     {
-        if (_browserSession is null || _browserSession.HasExited)
+        if (_browserSession is null)
         {
-            _browserSession = null;
             _vm.ClearBrowserPreview();
+            return;
+        }
+
+        if (_browserSession.IsEnded)
+        {
+            ClearBrowserSession(_browserSession);
             return;
         }
 
         if (!_browserSession.RequestClose())
             MessageBox.Show(this, "Close the isolated browser windows to end the preview.",
                 "Preview still running", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    private void ClearBrowserSession(BrowserPreviewSession session)
+    {
+        if (ReferenceEquals(_browserSession, session))
+        {
+            _browserSession = null;
+            _vm.ClearBrowserPreview();
+        }
+
+        session.Dispose();
     }
 
     private AddEntryRequest? ShowAddEntryDialog()

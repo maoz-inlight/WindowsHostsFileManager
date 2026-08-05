@@ -166,6 +166,12 @@ Browser launch therefore uses the interactive Windows shell token, creates the p
 suspended, verifies that the child is not elevated, and only then lets it execute. Failure
 to prove that boundary cancels the launch.
 
+Preview lifetime follows the visible browser window as well as the launched process.
+Chromium can leave a background process alive after its last window closes, so relying on
+process exit alone would leave a stale active-preview banner. Background mode is disabled
+for these sessions, and a short window-lifetime monitor clears the session when the last
+isolated window disappears.
+
 Visual style: flat surfaces, hairline borders, no gradients or drop shadows. Colour is
 reserved for meaning — green for enabled, accent blue for pending, red for invalid,
 muted grey for read-only.
