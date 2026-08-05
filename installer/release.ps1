@@ -73,8 +73,11 @@ try {
     git fetch origin --tags --quiet
     if ($LASTEXITCODE -ne 0) { Fail 'git fetch failed.' }
 
-    if ((git rev-parse HEAD).Trim() -ne (git rev-parse origin/master).Trim()) {
-        Fail 'Local master and origin/master have diverged. Pull or push first.'
+    # Being ahead of origin is the normal case — those are the commits being released.
+    # Being behind or diverged is not: the tag would name a commit that drops work.
+    git merge-base --is-ancestor origin/master HEAD
+    if ($LASTEXITCODE -ne 0) {
+        Fail 'Local master is behind or has diverged from origin/master. Pull first.'
     }
 
     if (git tag --list $tag) { Fail "Tag $tag already exists locally." }
