@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="1024" height="1024" viewBox="0 0 1024 1024"
+     role="img" aria-labelledby="title desc">
+  <title id="title">Hosts Manager app icon</title>
+  <desc id="desc">A dark rounded square containing connected network nodes and an edit toggle.</desc>
+
+  <defs>
+    <!-- Background -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#304454"/>
+      <stop offset="0.52" stop-color="#1b2d3a"/>
+      <stop offset="1" stop-color="#0b151f"/>
+    </linearGradient>
+    <linearGradient id="innerShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a5060" stop-opacity=".34"/>
+      <stop offset=".55" stop-color="#172834" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#000711" stop-opacity=".62"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6f8797"/>
+      <stop offset=".5" stop-color="#223846"/>
+      <stop offset="1" stop-color="#071019"/>
+    </linearGradient>
+
+    <!-- Cyan/blue materials -->
+    <radialGradient id="nodeFill" cx=".35" cy=".24" r=".8">
+      <stop offset="0" stop-color="#86fbff"/>
+      <stop offset=".28" stop-color="#25d5e7"/>
+      <stop offset=".68" stop-color="#0794bd"/>
+      <stop offset="1" stop-color="#045276"/>
+    </radialGradient>
+    <linearGradient id="cyanStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a4fdff"/>
+      <stop offset=".44" stop-color="#36d8e8"/>
+      <stop offset="1" stop-color="#087aa3"/>
+    </linearGradient>
+    <linearGradient id="switchFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#08a8bd"/>
+      <stop offset=".52" stop-color="#15d9df"/>
+      <stop offset="1" stop-color="#4ff9ef"/>
+    </linearGradient>
+    <linearGradient id="switchWell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1c303e"/>
+      <stop offset="1" stop-color="#061018"/>
+    </linearGradient>
+
+    <!-- Shadows and glows -->
+    <filter id="outerShadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="18" result="blur"/>
+      <feOffset dy="18" result="off"/>
+      <feColorMatrix in="off" type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 .72 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="blur"/>
+      <feOffset dy="8" result="off"/>
+      <feColorMatrix in="off" type="matrix"
+        values="0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 0 0
+                0 0 0 .65 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="cyanGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="7" result="glow"/>
+      <feColorMatrix in="glow" type="matrix"
+        values="0 0 0 0 0.05
+                0 0 0 0 0.84
+                0 0 0 0 0.92
+                0 0 0 .55 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <clipPath id="iconClip">
+      <rect x="112" y="92" width="800" height="800" rx="176"/>
+    </clipPath>
+
+    <g id="smallNode">
+      <circle r="48" fill="#08141e" stroke="#071018" stroke-width="10"/>
+      <circle r="41" fill="#123341" stroke="url(#cyanStroke)" stroke-width="4"/>
+      <circle r="31" fill="url(#nodeFill)" stroke="#b7ffff" stroke-width="2"/>
+      <ellipse cx="-10" cy="-13" rx="14" ry="10" fill="#d6ffff" opacity=".28"/>
+    </g>
+  </defs>
+
+  <!-- Main app tile -->
+  <g filter="url(#outerShadow)">
+    <rect x="112" y="92" width="800" height="800" rx="176"
+          fill="url(#bg)" stroke="#071018" stroke-width="14"/>
+    <rect x="124" y="104" width="776" height="776" rx="164"
+          fill="none" stroke="url(#rim)" stroke-width="4" opacity=".92"/>
+    <rect x="137" y="117" width="750" height="750" rx="151"
+          fill="url(#innerShade)" opacity=".72"/>
+  </g>
+
+  <!-- Subtle internal circuitry -->
+  <g clip-path="url(#iconClip)" opacity=".16" fill="none"
+     stroke="#7bc9d6" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M302 270v116q0 32 32 32h122"/>
+    <path d="M726 300v82q0 38-38 38H564"/>
+    <path d="M502 510v142q0 34-34 34H330"/>
+    <path d="M612 582h170"/>
+  </g>
+
+  <!-- Decorative faint points -->
+  <g fill="#8ce9f2" opacity=".16">
+    <circle cx="350" cy="292" r="8"/>
+    <circle cx="653" cy="340" r="8"/>
+    <circle cx="279" cy="392" r="9"/>
+    <circle cx="675" cy="560" r="9"/>
+    <circle cx="789" cy="470" r="7"/>
+  </g>
+
+  <!-- Network lines -->
+  <g fill="none" stroke="#071018" stroke-width="16" stroke-linecap="round">
+    <path d="M506 470L340 292"/>
+    <path d="M522 458L711 331"/>
+    <path d="M486 490L292 535"/>
+    <path d="M526 491L686 548"/>
+    <path d="M488 516L350 701"/>
+  </g>
+  <g fill="none" stroke="url(#cyanStroke)" stroke-width="8"
+     stroke-linecap="round" filter="url(#cyanGlow)">
+    <path d="M506 470L340 292"/>
+    <path d="M522 458L711 331"/>
+    <path d="M486 490L292 535"/>
+    <path d="M526 491L686 548"/>
+    <path d="M488 516L350 701"/>
+  </g>
+
+  <!-- Small nodes -->
+  <g filter="url(#softShadow)">
+    <use xlink:href="#smallNode" transform="translate(333 279)"/>
+    <use xlink:href="#smallNode" transform="translate(724 318)"/>
+    <use xlink:href="#smallNode" transform="translate(277 526)"/>
+    <use xlink:href="#smallNode" transform="translate(701 555)"/>
+    <use xlink:href="#smallNode" transform="translate(339 704)"/>
+  </g>
+
+  <!-- Center node -->
+  <g transform="translate(510 468)" filter="url(#softShadow)">
+    <circle r="102" fill="#06131d" stroke="#02070b" stroke-width="14"/>
+    <circle r="90" fill="#102c3a" stroke="url(#cyanStroke)" stroke-width="6"/>
+    <circle r="68" fill="url(#nodeFill)" stroke="#b6ffff" stroke-width="3"/>
+    <ellipse cx="-22" cy="-28" rx="28" ry="17" fill="#e2ffff" opacity=".22"/>
+    <circle cx="32" cy="-30" r="8" fill="#c7ffff" opacity=".28"/>
+  </g>
+
+  <!-- Edit toggle -->
+  <g transform="translate(602 650)" filter="url(#softShadow)">
+    <path d="M0 32C0 14 14 0 32 0h250c17 0 31 14 31 31v106c0 18-14 32-32 32H32C14 169 0 155 0 137Z"
+          fill="#071019" stroke="#0a1015" stroke-width="10"/>
+    <path d="M12 34C12 20 23 10 37 10h236c16 0 28 12 28 28v94c0 15-12 27-27 27H37c-14 0-25-11-25-25Z"
+          fill="url(#switchWell)" stroke="#435a68" stroke-width="4"/>
+    <rect x="30" y="38" width="214" height="94" rx="47"
+          fill="#0a151d" stroke="#071018" stroke-width="5"/>
+    <g transform="translate(222 84)">
+      <ellipse rx="66" ry="61" fill="#071018" opacity=".8"/>
+      <circle r="56" fill="url(#switchFill)" stroke="#7fffff" stroke-width="4"
+              filter="url(#cyanGlow)"/>
+      <!-- Pencil -->
+      <g transform="rotate(-45)">
+        <rect x="-7" y="-30" width="14" height="55" rx="5"
+              fill="#f5fbff" stroke="#d6eef2" stroke-width="2"/>
+        <path d="M-7 25H7L0 38Z" fill="#f5fbff" stroke="#d6eef2" stroke-width="2"/>
+        <path d="M-2 34L0 38L2 34Z" fill="#16323e"/>
+        <rect x="-7" y="-38" width="14" height="11" rx="3"
+              fill="#f5fbff" stroke="#d6eef2" stroke-width="2"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- Tiny bottom highlight -->
+  <path d="M250 866c100 18 420 18 520-4"
+        fill="none" stroke="#4ab7c6" stroke-width="5" opacity=".08"
+        stroke-linecap="round"/>
+</svg>

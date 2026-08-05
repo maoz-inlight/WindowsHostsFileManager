@@ -210,6 +210,7 @@ src/HostsManager.Core     Parsing, validation, backups, the write pipeline. No U
 src/HostsManager          WPF app, tray icon, theming.
 tests/HostsManager.Tests  Core regression tests run against a real hosts file as a fixture.
 installer                 WiX definition and the build script.
+tools                     One-off generators, e.g. the icon build.
 dist                      Installers and standalone executables.
 docs                      Design rationale and decision log — see below.
 ```

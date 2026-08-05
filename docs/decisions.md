@@ -15,16 +15,36 @@ A build-time `NoElevation` MSBuild property strips the manifest, producing an un
 build for rehearsal against a copy via `--hosts-path`. This is a dev-only escape hatch,
 not shipped in `dist`.
 
-## Logo: a drawn glyph, not a font character
+## Logo: an SVG source, rasterized per size
 
-The icon renders `#` as hand-drawn strokes (`IconMaker.cs`-equivalent generation script)
-rather than setting a font glyph, because a font's `#` gets inconsistent weight and
-alignment across the 16–256px range an `.ico` needs to cover, especially at 16px where
-subpixel hinting varies by renderer. Stroke width and spacing are computed as a fraction
-of the target size instead, so the mark looks the same shape at every size.
+`Assets/app.svg` is the source of truth for the mark; `app.ico` is a generated artifact
+that is committed anyway, so building the app never requires a rasterizer to be installed.
+`tools/make-icon.ps1` regenerates it.
 
-The mark itself — `#` — was picked because it's literally the character the app adds or
-removes when toggling an entry, not a generic network/globe icon.
+Every size is rendered from its own copy of the SVG with `width`/`height` set to that size,
+not by downscaling one large bitmap. The renderer then rasterizes the geometry at the
+target resolution, so strokes and the tile's corner radius land on the pixel grid instead
+of being resampled.
+
+The rasterizer is headless Edge or Chrome. That is a strange dependency for a build step,
+but the artwork uses `feGaussianBlur`, `feColorMatrix` and radial gradients, and every
+alternative (Inkscape, ImageMagick, resvg) is an install a contributor would otherwise
+never need — whereas Edge ships with Windows. The script waits for the screenshot to
+appear rather than trusting the process to have written it: Edge relaunches itself through
+a stub and returns early, and it needs a fresh profile directory per render or the second
+launch hands its URL to the still-live first instance and exits without drawing anything.
+
+The previous mark was a drawn `#`, chosen because it is literally the character the app
+adds or removes when toggling an entry. It survived down to 16px better than the current
+one does; see the note below.
+
+### Known: the small sizes are soft
+
+The artwork carries five satellite nodes, faint circuitry, and a toggle switch. Below about
+32px those collapse into a blur — at 16px, the size Windows uses for the title bar and the
+small taskbar, only "dark tile, cyan smudge" survives. Fixing it properly means a separate
+simplified variant for 16/20/24 (tile plus the centre node, everything else dropped) rather
+than anything the pipeline can do.
 
 ## Theming: DynamicResource + a live registry watch, not a restart
 
