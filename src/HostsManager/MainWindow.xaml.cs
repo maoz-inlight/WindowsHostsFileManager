@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using HostsManager.Services;
 using HostsManager.ViewModels;
 using HostsManager.Views;
@@ -10,6 +11,8 @@ namespace HostsManager;
 public partial class MainWindow : Window
 {
     private readonly MainViewModel _vm;
+    private readonly BrowserPreviewService _browserPreview = new();
+    private BrowserPreviewSession? _browserSession;
 
     public MainWindow(MainViewModel vm)
     {
@@ -27,8 +30,66 @@ public partial class MainWindow : Window
             == MessageBoxResult.OK;
         vm.ShowError = (title, message) =>
             MessageBox.Show(this, message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
+        vm.RequestOpenIsolatedBrowser = OpenIsolatedBrowser;
+        vm.EndBrowserPreview = EndBrowserPreview;
 
         Loaded += (_, _) => vm.Initialize();
+    }
+
+    private void OpenIsolatedBrowser(IReadOnlyList<EntryViewModel> entries)
+    {
+        try
+        {
+            var browsers = _browserPreview.FindInstalledBrowsers();
+            if (browsers.Count == 0)
+            {
+                MessageBox.Show(this, "Install Microsoft Edge or Google Chrome to use an isolated preview.",
+                    "No supported browser found", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var dialog = new BrowserPreviewDialog(entries.Select(entry => entry.Line).ToArray(), browsers)
+            {
+                Owner = this,
+            };
+            ThemeManager.Track(dialog);
+            if (dialog.ShowDialog() != true) return;
+
+            var session = _browserPreview.Launch(
+                dialog.SelectedBrowser, dialog.Overrides, dialog.SelectedStartUris);
+            _browserSession = session;
+            _vm.SetBrowserPreview(session.Description);
+
+            session.Exited += () => Dispatcher.InvokeAsync(() =>
+            {
+                if (ReferenceEquals(_browserSession, session))
+                {
+                    _browserSession = null;
+                    _vm.ClearBrowserPreview();
+                }
+
+                session.Dispose();
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Could not open isolated browser",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private void EndBrowserPreview()
+    {
+        if (_browserSession is null || _browserSession.HasExited)
+        {
+            _browserSession = null;
+            _vm.ClearBrowserPreview();
+            return;
+        }
+
+        if (!_browserSession.RequestClose())
+            MessageBox.Show(this, "Close the isolated browser windows to end the preview.",
+                "Preview still running", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private AddEntryRequest? ShowAddEntryDialog()
@@ -48,6 +109,7 @@ public partial class MainWindow : Window
     {
         if (MoreButton.ContextMenu is not { } menu) return;
 
+        menu.DataContext = _vm;
         menu.PlacementTarget = MoreButton;
         menu.IsOpen = true;
     }
@@ -80,6 +142,32 @@ public partial class MainWindow : Window
             2 => EntryFilter.Problems,
             _ => EntryFilter.All,
         };
+    }
+
+    private void OnEntrySelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm) return;
+
+        var selected = EntryGrid.Items
+            .OfType<EntryViewModel>()
+            .Where(entry => EntryGrid.SelectedItems.Contains(entry));
+        vm.SetSelectedEntries(selected);
+    }
+
+    private void OnEntryGridPreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var row = ItemsControl.ContainerFromElement(
+            EntryGrid, e.OriginalSource as DependencyObject) as DataGridRow;
+        if (row is null || row.IsSelected) return;
+
+        EntryGrid.SelectedItems.Clear();
+        row.IsSelected = true;
+        EntryGrid.SelectedItem = row.Item;
+    }
+
+    private void OnEntryGridContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (EntryGrid.ContextMenu is { } menu) menu.DataContext = _vm;
     }
 
     /// <summary>Set once so the tray's Exit can close the window for real.</summary>
@@ -120,6 +208,7 @@ public partial class MainWindow : Window
     {
         if (_exiting)
         {
+            _browserPreview.Dispose();
             _vm.Dispose();
             base.OnClosing(e);
             return;

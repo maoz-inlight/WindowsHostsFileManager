@@ -15,11 +15,13 @@
         <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding SaveCommand}" />
         <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding AddCommand}" />
         <KeyBinding Key="R" Modifiers="Ctrl" Command="{Binding ReloadCommand}" />
+        <KeyBinding Key="O" Modifiers="Ctrl+Shift" Command="{Binding OpenIsolatedBrowserCommand}" />
         <KeyBinding Key="Delete" Command="{Binding DeleteCommand}" />
     </Window.InputBindings>
 
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -86,6 +88,10 @@
                                           Command="{Binding BackupsCommand}" />
                                 <MenuItem Header="Flush DNS cache" Style="{StaticResource OverflowMenuItem}"
                                           Command="{Binding FlushDnsCommand}" />
+                                <MenuItem Header="{Binding OpenIsolatedBrowserText}"
+                                          Style="{StaticResource OverflowMenuItem}"
+                                          Command="{Binding OpenIsolatedBrowserCommand}"
+                                          ToolTip="Open the selected domains in a browser without changing Windows DNS" />
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>
@@ -115,8 +121,20 @@
             </Grid>
         </Border>
 
+        <!-- A Chromium process whose resolver is scoped to the selected mapping -->
+        <Border Grid.Row="4" Background="{DynamicResource SuccessBg}" BorderBrush="{DynamicResource Success}"
+                BorderThickness="0,0,0,1" Padding="16,10"
+                Visibility="{Binding IsBrowserPreviewActive, Converter={StaticResource BoolToVis}}">
+            <Grid>
+                <TextBlock Text="{Binding BrowserPreviewText}" FontSize="12.5"
+                           Foreground="{DynamicResource Success}" VerticalAlignment="Center" />
+                <Button Content="Close preview" Style="{StaticResource LinkButton}" HorizontalAlignment="Right"
+                        Foreground="{DynamicResource Success}" Command="{Binding EndBrowserPreviewCommand}" />
+            </Grid>
+        </Border>
+
         <!-- Filter -->
-        <Border Grid.Row="4" BorderBrush="{DynamicResource Border0}" BorderThickness="0,0,0,1" Padding="12,10">
+        <Border Grid.Row="5" BorderBrush="{DynamicResource Border0}" BorderThickness="0,0,0,1" Padding="12,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -138,16 +156,27 @@
         </Border>
 
         <!-- Entries -->
-        <DataGrid Grid.Row="5" x:Name="EntryGrid" ItemsSource="{Binding EntriesView}"
+        <DataGrid Grid.Row="6" x:Name="EntryGrid" ItemsSource="{Binding EntriesView}"
                   SelectedItem="{Binding SelectedEntry}"
+                  SelectionChanged="OnEntrySelectionChanged"
+                  PreviewMouseRightButtonDown="OnEntryGridPreviewMouseRightButtonDown"
+                  ContextMenuOpening="OnEntryGridContextMenuOpening"
                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                   CanUserResizeRows="False" CanUserReorderColumns="False"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                   HorizontalGridLinesBrush="{DynamicResource Border0}"
                   Background="{DynamicResource Surface2}" BorderThickness="0" RowHeight="34"
                   ColumnHeaderStyle="{StaticResource GridColumnHeader}" CellStyle="{StaticResource GridCell}"
-                  SelectionMode="Single" IsReadOnly="True"
+                  SelectionMode="Extended" IsReadOnly="True"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+
+            <DataGrid.ContextMenu>
+                <ContextMenu Style="{StaticResource OverflowMenu}">
+                    <MenuItem Header="{Binding OpenIsolatedBrowserText}"
+                              Style="{StaticResource OverflowMenuItem}"
+                              Command="{Binding OpenIsolatedBrowserCommand}" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
 
             <DataGrid.RowStyle>
                 <!-- Selection styling lives in GridRow, shared with the backups grid. -->
@@ -280,7 +309,7 @@
         </DataGrid>
 
         <!-- Status bar. Showing the encoding is the visible proof the format is preserved. -->
-        <Border Grid.Row="6" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border0}"
+        <Border Grid.Row="7" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border0}"
                 BorderThickness="0,1,0,0" Padding="14,7">
             <Grid>
                 <Grid.ColumnDefinitions>

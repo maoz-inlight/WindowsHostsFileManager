@@ -132,14 +132,18 @@ elevation, which is exactly the situation you're in when something has gone wron
 ## UI
 
 - Toolbar: Add, Delete on the left; Revert, Save on the right. It carries document
-  actions only. Backups and Flush DNS don't touch the pending edit, so they sit behind
-  an overflow menu at the right edge rather than competing with the buttons used every
-  session. Reload isn't on the toolbar at all — it's the same operation as Revert, and
+  actions only. Backups, Flush DNS, and isolated browser preview don't touch the pending
+  edit, so they sit behind an overflow menu at the right edge rather than competing with
+  the buttons used every session. Reload isn't on the toolbar at all — it's the same
+  operation as Revert, and
   re-reading the file only becomes the wanted action once the external-change banner
   fires, so the banner and Ctrl+R own it.
 - Grid: toggle switch (not a checkbox — faster to scan in a dense list) | Domain | Maps
   to | Source | Status. Read-only rows show a lock icon instead of a toggle. Unparseable
   rows show their line number so they're findable in an external editor.
+- Standard Ctrl/Shift row selection feeds one combined isolated-browser session. Right-click
+  preserves an existing multi-selection and exposes the same count-aware action as the
+  overflow menu and Ctrl+Shift+O.
 - Row states: normal, `Pending` (edited, unsaved), `Disabled`, `Invalid`.
 - Explicit Save (not write-on-every-toggle), so a session of edits becomes one elevated
   write with one backup.
@@ -147,6 +151,20 @@ elevation, which is exactly the situation you're in when something has gone wron
   while the window is open.
 - Status bar shows the detected encoding as visible, deliberate proof that the file's
   format is being preserved rather than silently normalized.
+
+### Isolated browser preview
+
+One or more entries can be opened in Edge or Chrome without modifying the system hosts
+file. The app translates every hostname on the selected lines into Chromium
+`host-resolver-rules`, lets the user choose and edit the starting tabs, and uses a rule-keyed
+browser profile. That prevents an existing browser process with a different ruleset from
+swallowing the new launch arguments. Repeated hostnames are combined only when their
+targets agree; conflicting targets stop the launch and identify the hostname.
+
+The main app is elevated, so a normal child process would inherit administrator rights.
+Browser launch therefore uses the interactive Windows shell token, creates the process
+suspended, verifies that the child is not elevated, and only then lets it execute. Failure
+to prove that boundary cancels the launch.
 
 Visual style: flat surfaces, hairline borders, no gradients or drop shadows. Colour is
 reserved for meaning — green for enabled, accent blue for pending, red for invalid,

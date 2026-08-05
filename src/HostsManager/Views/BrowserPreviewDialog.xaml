@@ -1,0 +1,90 @@
+<Window x:Class="HostsManager.Views.BrowserPreviewDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Open with overrides" Height="520" Width="620" MinHeight="460" MinWidth="520"
+        Background="{DynamicResource Surface0}" FontFamily="{StaticResource UiFont}"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
+        UseLayoutRounding="True">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" x:Name="HeadingText" Text="Open in an isolated browser"
+                   FontSize="18" FontWeight="SemiBold" />
+        <TextBlock Grid.Row="1" Margin="0,6,0,16" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextSecondary}"
+                   Text="These mappings apply only to the new browser window. The Windows hosts file and your normal browser are not changed." />
+
+        <Grid Grid.Row="2" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="84" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Browser" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" x:Name="BrowserBox" Style="{StaticResource FlatComboBox}"
+                      ItemContainerStyle="{StaticResource FlatComboBoxItem}"
+                      DisplayMemberPath="DisplayName" SelectionChanged="OnInputChanged" />
+        </Grid>
+
+        <Border Grid.Row="3" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border0}"
+                BorderThickness="1" CornerRadius="5" Padding="12" Margin="0,0,0,12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Tabs to open" FontWeight="SemiBold" Margin="0,0,0,8" />
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="StartPagesList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0" Margin="0,0,8,0" VerticalAlignment="Center"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              Checked="OnStartPageChanged" Unchecked="OnStartPageChanged" />
+                                    <TextBox Grid.Column="1" Style="{StaticResource FlatTextBox}"
+                                             Text="{Binding UrlText, UpdateSourceTrigger=PropertyChanged}"
+                                             TextChanged="OnStartPageChanged" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="4" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border0}"
+                BorderThickness="1" CornerRadius="5" Padding="12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="Session mappings" FontWeight="SemiBold" Margin="0,0,0,8" />
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <TextBlock x:Name="MappingsText" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                               Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="5" Margin="0,16,0,0">
+            <TextBlock x:Name="ErrorText" Foreground="{DynamicResource Danger}" VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Cancel" Style="{StaticResource ToolButton}" Padding="16,7" IsCancel="True" />
+                <Button x:Name="OpenButton" Content="Open isolated" Style="{StaticResource PrimaryButton}"
+                        Padding="18,7" Margin="6,0,0,0" IsDefault="True" Click="OnOpen" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

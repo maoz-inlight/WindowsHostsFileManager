@@ -39,6 +39,10 @@ public sealed class MainViewModel : Observable, IDisposable
         ToggleCommand = new RelayCommand(ToggleSelected, () => SelectedEntry is { CanToggle: true });
         ShowProblemsCommand = new RelayCommand(() => Filter = EntryFilter.Problems);
         DeleteRowCommand = new RelayCommand(o => DeleteEntry(o as EntryViewModel));
+        OpenIsolatedBrowserCommand = new RelayCommand(OpenIsolatedBrowser,
+            () => SelectedEntries.Count > 0);
+        EndBrowserPreviewCommand = new RelayCommand(() => EndBrowserPreview?.Invoke(),
+            () => IsBrowserPreviewActive);
     }
 
     // ---- host-supplied dialogs -------------------------------------------
@@ -47,6 +51,8 @@ public sealed class MainViewModel : Observable, IDisposable
     public Action? ShowBackups { get; set; }
     public Func<string, string, bool>? Confirm { get; set; }
     public Action<string, string>? ShowError { get; set; }
+    public Action<IReadOnlyList<EntryViewModel>>? RequestOpenIsolatedBrowser { get; set; }
+    public Action? EndBrowserPreview { get; set; }
 
     // ---- state ------------------------------------------------------------
 
@@ -64,6 +70,8 @@ public sealed class MainViewModel : Observable, IDisposable
     public RelayCommand BackupsCommand { get; }
     public RelayCommand ToggleCommand { get; }
     public RelayCommand ShowProblemsCommand { get; }
+    public RelayCommand OpenIsolatedBrowserCommand { get; }
+    public RelayCommand EndBrowserPreviewCommand { get; }
 
     /// <summary>
     /// Deletes a specific row directly, without requiring it to be selected first. The
@@ -77,6 +85,40 @@ public sealed class MainViewModel : Observable, IDisposable
     {
         get => _selectedEntry;
         set => Set(ref _selectedEntry, value);
+    }
+
+    private IReadOnlyList<EntryViewModel> _selectedEntries = Array.Empty<EntryViewModel>();
+    public IReadOnlyList<EntryViewModel> SelectedEntries => _selectedEntries;
+
+    public string OpenIsolatedBrowserText => SelectedEntries.Count switch
+    {
+        > 1 => $"Open {SelectedEntries.Count} entries in isolation…",
+        _ => "Open selected in isolation…",
+    };
+
+    public void SetSelectedEntries(IEnumerable<EntryViewModel> entries)
+    {
+        _selectedEntries = entries
+            .Where(entry => entry.Line.IsEntry)
+            .Distinct()
+            .ToArray();
+        Raise(nameof(SelectedEntries));
+        Raise(nameof(OpenIsolatedBrowserText));
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+    }
+
+    private bool _isBrowserPreviewActive;
+    public bool IsBrowserPreviewActive
+    {
+        get => _isBrowserPreviewActive;
+        private set => Set(ref _isBrowserPreviewActive, value);
+    }
+
+    private string _browserPreviewText = "";
+    public string BrowserPreviewText
+    {
+        get => _browserPreviewText;
+        private set => Set(ref _browserPreviewText, value);
     }
 
     public string Search
@@ -161,6 +203,26 @@ public sealed class MainViewModel : Observable, IDisposable
 
     // ---- operations -------------------------------------------------------
 
+    private void OpenIsolatedBrowser()
+    {
+        if (SelectedEntries.Count > 0)
+            RequestOpenIsolatedBrowser?.Invoke(SelectedEntries);
+    }
+
+    public void SetBrowserPreview(string description)
+    {
+        BrowserPreviewText = $"Isolated browser active · {description}";
+        IsBrowserPreviewActive = true;
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+    }
+
+    public void ClearBrowserPreview()
+    {
+        IsBrowserPreviewActive = false;
+        BrowserPreviewText = "";
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+    }
+
     public void Initialize()
     {
         Reload(discardChanges: true);
@@ -199,6 +261,7 @@ public sealed class MainViewModel : Observable, IDisposable
         {
             var doc = _writer.Load();
 
+            SetSelectedEntries(Array.Empty<EntryViewModel>());
             Entries.Clear();
             var shadowed = doc.FindShadowedEntries().ToHashSet();
 
