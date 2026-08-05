@@ -86,6 +86,14 @@
                             <ContextMenu Style="{StaticResource OverflowMenu}">
                                 <MenuItem Header="Backups…" Style="{StaticResource OverflowMenuItem}"
                                           Command="{Binding BackupsCommand}" />
+                                <Separator Style="{StaticResource OverflowSeparator}" />
+                                <MenuItem Header="Import entries…" Style="{StaticResource OverflowMenuItem}"
+                                          Command="{Binding ImportCommand}"
+                                          ToolTip="Replace editable entries from another hosts file" />
+                                <MenuItem Header="Merge entries…" Style="{StaticResource OverflowMenuItem}"
+                                          Command="{Binding MergeCommand}"
+                                          ToolTip="Add hostnames from another hosts file, skipping duplicates" />
+                                <Separator Style="{StaticResource OverflowSeparator}" />
                                 <MenuItem Header="Flush DNS cache" Style="{StaticResource OverflowMenuItem}"
                                           Command="{Binding FlushDnsCommand}" />
                                 <MenuItem Header="{Binding OpenIsolatedBrowserText}"
@@ -141,8 +149,29 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <TextBox Grid.Column="0" Style="{StaticResource FlatTextBox}"
-                         Text="{Binding Search, UpdateSourceTrigger=PropertyChanged, Delay=120}" />
+                <Grid Grid.Column="0">
+                    <TextBox x:Name="SearchBox" Style="{StaticResource FlatTextBox}" Padding="31,0,9,0"
+                             Text="{Binding Search, UpdateSourceTrigger=PropertyChanged, Delay=120}"
+                             ToolTip="Filter by domain, IP address, comment, source, or status" />
+                    <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                               Foreground="{DynamicResource TextMuted}" Margin="10,0,0,0"
+                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                               IsHitTestVisible="False" />
+                    <TextBlock Text="Search domains, IPs, comments, sources, or status"
+                               Foreground="{DynamicResource TextMuted}" Margin="31,0,0,0"
+                               VerticalAlignment="Center" IsHitTestVisible="False">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
 
                 <ComboBox Grid.Column="1" x:Name="FilterBox" Width="150" Margin="8,0,0,0"
                           Style="{StaticResource FlatComboBox}"
@@ -162,7 +191,7 @@
                   PreviewMouseRightButtonDown="OnEntryGridPreviewMouseRightButtonDown"
                   ContextMenuOpening="OnEntryGridContextMenuOpening"
                   AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
-                  CanUserResizeRows="False" CanUserReorderColumns="False"
+                  CanUserResizeRows="False" CanUserReorderColumns="False" CanUserSortColumns="True"
                   HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                   HorizontalGridLinesBrush="{DynamicResource Border0}"
                   Background="{DynamicResource Surface2}" BorderThickness="0" RowHeight="34"
@@ -196,7 +225,7 @@
 
             <DataGrid.Columns>
                 <!-- Toggle, or a lock for blocks another tool owns -->
-                <DataGridTemplateColumn Width="56">
+                <DataGridTemplateColumn Width="56" CanUserSort="False">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Grid Margin="14,0,0,0" HorizontalAlignment="Left">
@@ -226,7 +255,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Domain" Width="*">
+                <DataGridTemplateColumn Header="Domain" Width="*" SortMemberPath="Domain">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding Domain}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
@@ -254,7 +283,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Maps to" Width="140">
+                <DataGridTemplateColumn Header="Maps to" Width="140" SortMemberPath="MapsToSortKey">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding MapsTo}" FontFamily="{StaticResource MonoFont}" FontSize="12"
@@ -263,7 +292,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Source" Width="100">
+                <DataGridTemplateColumn Header="Source" Width="100" SortMemberPath="Source">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding Source}" FontSize="12"
@@ -272,7 +301,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Status" Width="104">
+                <DataGridTemplateColumn Header="Status" Width="104" SortMemberPath="StatusText">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Border>

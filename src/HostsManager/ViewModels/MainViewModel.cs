@@ -36,6 +36,8 @@ public sealed class MainViewModel : Observable, IDisposable
         RevertCommand = new RelayCommand(RevertWithConfirmation, () => IsDirty);
         FlushDnsCommand = new RelayCommand(FlushDns);
         BackupsCommand = new RelayCommand(() => ShowBackups?.Invoke());
+        ImportCommand = new RelayCommand(ImportEntries);
+        MergeCommand = new RelayCommand(MergeEntries);
         ToggleCommand = new RelayCommand(ToggleSelected, () => SelectedEntry is { CanToggle: true });
         ShowProblemsCommand = new RelayCommand(() => Filter = EntryFilter.Problems);
         DeleteRowCommand = new RelayCommand(o => DeleteEntry(o as EntryViewModel));
@@ -48,6 +50,7 @@ public sealed class MainViewModel : Observable, IDisposable
     // ---- host-supplied dialogs -------------------------------------------
 
     public Func<AddEntryRequest?>? RequestAddEntry { get; set; }
+    public Func<string, string?>? RequestHostsFile { get; set; }
     public Action? ShowBackups { get; set; }
     public Func<string, string, bool>? Confirm { get; set; }
     public Action<string, string>? ShowError { get; set; }
@@ -68,6 +71,8 @@ public sealed class MainViewModel : Observable, IDisposable
     public RelayCommand RevertCommand { get; }
     public RelayCommand FlushDnsCommand { get; }
     public RelayCommand BackupsCommand { get; }
+    public RelayCommand ImportCommand { get; }
+    public RelayCommand MergeCommand { get; }
     public RelayCommand ToggleCommand { get; }
     public RelayCommand ShowProblemsCommand { get; }
     public RelayCommand OpenIsolatedBrowserCommand { get; }
@@ -260,18 +265,7 @@ public sealed class MainViewModel : Observable, IDisposable
         try
         {
             var doc = _writer.Load();
-
-            SetSelectedEntries(Array.Empty<EntryViewModel>());
-            Entries.Clear();
-            var shadowed = doc.FindShadowedEntries().ToHashSet();
-
-            foreach (var line in doc.Lines.Where(l => l.IsEntry || l.Kind == LineKind.Unparseable))
-            {
-                Entries.Add(new EntryViewModel(line, doc, OnDocumentChanged)
-                {
-                    IsShadowed = shadowed.Contains(line),
-                });
-            }
+            RebuildRows(doc);
 
             HasExternalChange = false;
             StatusMessage = "";
@@ -282,6 +276,101 @@ public sealed class MainViewModel : Observable, IDisposable
             ShowError?.Invoke("Could not read the hosts file", ex.Message);
         }
     }
+
+    private void ImportEntries()
+    {
+        var path = RequestHostsFile?.Invoke("Import hosts entries");
+        if (path is null) return;
+
+        var doc = _writer.Document;
+        if (doc is null) return;
+
+        try
+        {
+            var import = HostsImportReader.Read(path);
+            if (import.Entries.Count == 0)
+            {
+                ShowError?.Invoke("Nothing to import",
+                    $"{Path.GetFileName(path)} does not contain any valid editable hosts entries.");
+                return;
+            }
+
+            var currentCount = doc.Entries.Count(line => !line.IsReadOnly);
+            var ignored = DescribeIgnored(import);
+            var message =
+                $"Replace {Count(currentCount, "editable entry", "editable entries")} with " +
+                $"{Count(import.Entries.Count, "entry", "entries")} from {Path.GetFileName(path)}?\n\n" +
+                "Comments, unparseable text, and Docker/Tailscale blocks in the current file are preserved. " +
+                "The imported changes remain pending until you click Save." + ignored;
+
+            if (Confirm?.Invoke("Import entries", message) != true) return;
+
+            doc.ReplaceUserEntries(import.Entries);
+            RebuildRows(doc);
+            StatusMessage = $"Imported {Count(import.Entries.Count, "entry", "entries")}.";
+            RaiseAll();
+        }
+        catch (Exception ex)
+        {
+            ShowError?.Invoke("Could not import that file", ex.Message);
+        }
+    }
+
+    private void MergeEntries()
+    {
+        var path = RequestHostsFile?.Invoke("Merge hosts entries");
+        if (path is null) return;
+
+        var doc = _writer.Document;
+        if (doc is null) return;
+
+        try
+        {
+            var import = HostsImportReader.Read(path);
+            if (import.Entries.Count == 0)
+            {
+                ShowError?.Invoke("Nothing to merge",
+                    $"{Path.GetFileName(path)} does not contain any valid editable hosts entries.");
+                return;
+            }
+
+            var ignored = DescribeIgnored(import);
+            var message =
+                $"Merge {Count(import.Entries.Count, "entry", "entries")} from {Path.GetFileName(path)}?\n\n" +
+                "Hostnames already present in the current file are skipped, including disabled entries. " +
+                "New mappings remain pending until you click Save." + ignored;
+
+            if (Confirm?.Invoke("Merge entries", message) != true) return;
+
+            var result = doc.MergeEntries(import.Entries);
+            RebuildRows(doc);
+            StatusMessage = result.AddedHostnames == 0
+                ? $"Nothing merged; {Count(result.SkippedDuplicateHostnames, "hostname was", "hostnames were")} already present."
+                : $"Merged {Count(result.AddedHostnames, "hostname", "hostnames")}; " +
+                  $"skipped {Count(result.SkippedDuplicateHostnames, "duplicate", "duplicates")}.";
+            RaiseAll();
+        }
+        catch (Exception ex)
+        {
+            ShowError?.Invoke("Could not merge that file", ex.Message);
+        }
+    }
+
+    private static string DescribeIgnored(HostsImportFile import)
+    {
+        var ignored = new List<string>();
+        if (import.UnparseableLineCount > 0)
+            ignored.Add(Count(import.UnparseableLineCount, "unparseable line", "unparseable lines"));
+        if (import.ManagedEntryCount > 0)
+            ignored.Add(Count(import.ManagedEntryCount, "tool-managed entry", "tool-managed entries"));
+
+        return ignored.Count == 0
+            ? ""
+            : $"\n\nThe source file's {string.Join(" and ", ignored)} will be ignored.";
+    }
+
+    private static string Count(int value, string singular, string plural) =>
+        $"{value} {(value == 1 ? singular : plural)}";
 
     private void Add()
     {
@@ -399,6 +488,24 @@ public sealed class MainViewModel : Observable, IDisposable
         EntriesView.Refresh();
     }
 
+    private void RebuildRows(HostsDocument doc)
+    {
+        SetSelectedEntries(Array.Empty<EntryViewModel>());
+        SelectedEntry = null;
+        Entries.Clear();
+
+        var shadowed = doc.FindShadowedEntries().ToHashSet();
+        foreach (var line in doc.Lines.Where(line => line.IsEntry || line.Kind == LineKind.Unparseable))
+        {
+            Entries.Add(new EntryViewModel(line, doc, OnDocumentChanged)
+            {
+                IsShadowed = shadowed.Contains(line),
+            });
+        }
+
+        EntriesView.Refresh();
+    }
+
     public void RaiseAll()
     {
         Raise(nameof(IsDirty));
@@ -420,8 +527,18 @@ public sealed class MainViewModel : Observable, IDisposable
 
         if (string.IsNullOrWhiteSpace(_search)) return true;
 
-        return entry.Domain.Contains(_search, StringComparison.OrdinalIgnoreCase)
-            || entry.MapsTo.Contains(_search, StringComparison.OrdinalIgnoreCase);
+        var searchable = string.Join('\n', new[]
+        {
+            entry.Domain,
+            entry.MapsTo,
+            entry.Comment ?? "",
+            entry.Source,
+            entry.StatusText,
+            entry.Line.Render(),
+        });
+
+        return _search.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .All(term => searchable.Contains(term, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Covers ::1 and the whole 127.0.0.0/8 range, not just the literal 127.0.0.1.</summary>
