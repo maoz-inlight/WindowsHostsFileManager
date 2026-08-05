@@ -59,6 +59,26 @@ public class WriterTests : IDisposable
     }
 
     [Fact]
+    public void ImportAndSave_UsesTheVerifiedWriterPipeline()
+    {
+        var doc = _writer.Load();
+        var import = HostsImportReader.Parse(System.Text.Encoding.UTF8.GetBytes(
+            "10.0.0.1 imported.local # from another file\r\n" +
+            "#10.0.0.2 disabled.imported.local\r\n"));
+
+        doc.ReplaceUserEntries(import.Entries);
+        var result = _writer.Save("Imported entries");
+
+        Assert.True(result.Success);
+        var reloaded = _writer.Load();
+        Assert.Contains(reloaded.Entries, line => line.PrimaryHostname == "imported.local" && line.IsEnabled);
+        Assert.Contains(reloaded.Entries, line => line.PrimaryHostname == "disabled.imported.local" && !line.IsEnabled);
+        Assert.Contains(reloaded.Entries, line => line.ManagedBy == "Docker");
+        Assert.Contains(reloaded.Entries, line => line.ManagedBy == "Tailscale");
+        Assert.NotEmpty(_backups.List());
+    }
+
+    [Fact]
     public void ToggleOffAndBackOn_RestoresTheOriginalBytes()
     {
         var before = OnDisk;

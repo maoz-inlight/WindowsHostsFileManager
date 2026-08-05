@@ -32,6 +32,17 @@ public sealed class EntryViewModel : Observable
     /// <summary>The mapped IP, or the line number for junk so it can be found in an editor.</summary>
     public string MapsTo => IsUnparseable ? $"line {Line.LineNumber}" : Line.Ip ?? "";
 
+    /// <summary>Lexicographically sortable key that still orders IP addresses numerically.</summary>
+    public string MapsToSortKey
+    {
+        get
+        {
+            if (!System.Net.IPAddress.TryParse(Line.Ip, out var address)) return "2" + MapsTo;
+            var family = address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? "0" : "1";
+            return family + Convert.ToHexString(address.GetAddressBytes());
+        }
+    }
+
     public string Source => Line.ManagedBy ?? (IsUnparseable ? "Unknown" : "You");
 
     public string? Comment => Line.InlineComment;

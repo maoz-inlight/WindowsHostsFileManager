@@ -130,11 +130,78 @@ public sealed class HostsDocument
             IsModified = true,
         };
 
-        var insertAt = LastUserEntryIndex() + 1;
+        var insertAt = UserEntryInsertIndex();
         _lines.Insert(insertAt, line);
 
         EnsureLineSeparators();
         return line;
+    }
+
+    /// <summary>
+    /// Replaces only mappings owned by the user. Comments, unparseable text and blocks
+    /// owned by another tool stay exactly where and how they were in the current file.
+    /// Imported mappings keep their enabled state, spacing and inline comments.
+    /// </summary>
+    public int ReplaceUserEntries(IEnumerable<HostsImportEntry> entries)
+    {
+        var replacements = entries.Select(CreateImportedLine).ToList();
+        var editableIndices = _lines
+            .Select((line, index) => (line, index))
+            .Where(item => item.line.IsEntry && !item.line.IsReadOnly)
+            .Select(item => item.index)
+            .ToArray();
+
+        var insertAt = editableIndices.Length > 0 ? editableIndices[0] : UserEntryInsertIndex();
+        for (var i = editableIndices.Length - 1; i >= 0; i--)
+            _lines.RemoveAt(editableIndices[i]);
+
+        insertAt = Math.Clamp(insertAt, 0, _lines.Count);
+        _lines.InsertRange(insertAt, replacements);
+        EnsureLineSeparators();
+        return editableIndices.Length;
+    }
+
+    /// <summary>
+    /// Adds mappings from another file without introducing duplicate hostnames. Existing
+    /// active and disabled names both count as duplicates. If only some aliases on an
+    /// imported line are new, the new aliases are retained as one normalized mapping.
+    /// </summary>
+    public HostsMergeResult MergeEntries(IEnumerable<HostsImportEntry> entries)
+    {
+        var known = _lines
+            .Where(line => line.IsEntry)
+            .SelectMany(line => line.Hostnames)
+            .Select(NormalizeHostname)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var additions = new List<HostsLine>();
+        var addedHostnames = 0;
+        var skippedHostnames = 0;
+
+        foreach (var entry in entries)
+        {
+            ValidateImportEntry(entry);
+
+            var novel = new List<string>();
+            foreach (var hostname in entry.Hostnames)
+            {
+                if (known.Add(NormalizeHostname(hostname))) novel.Add(hostname);
+                else skippedHostnames++;
+            }
+
+            if (novel.Count == 0) continue;
+
+            addedHostnames += novel.Count;
+            additions.Add(novel.Count == entry.Hostnames.Count
+                ? CreateImportedLine(entry)
+                : CreateNormalizedImportedLine(entry, novel));
+        }
+
+        var insertAt = UserEntryInsertIndex();
+        _lines.InsertRange(insertAt, additions);
+        EnsureLineSeparators();
+
+        return new HostsMergeResult(additions.Count, addedHostnames, skippedHostnames);
     }
 
     public void Remove(HostsLine line)
@@ -186,13 +253,59 @@ public sealed class HostsDocument
             throw new InvalidOperationException($"This entry is managed by {line.ManagedBy} and cannot be changed here.");
     }
 
-    private int LastUserEntryIndex()
+    private int UserEntryInsertIndex()
     {
         for (var i = _lines.Count - 1; i >= 0; i--)
-            if (_lines[i].IsEntry && !_lines[i].IsReadOnly) return i;
+            if (_lines[i].IsEntry && !_lines[i].IsReadOnly) return i + 1;
 
-        return _lines.Count - 1;
+        var firstManaged = _lines.FindIndex(line => line.IsReadOnly);
+        return firstManaged >= 0 ? firstManaged : _lines.Count;
     }
+
+    private HostsLine CreateImportedLine(HostsImportEntry entry)
+    {
+        ValidateImportEntry(entry);
+
+        return new HostsLine
+        {
+            Kind = entry.IsEnabled ? LineKind.Entry : LineKind.DisabledEntry,
+            Body = entry.Body,
+            DisablePrefix = entry.DisablePrefix,
+            Terminator = Format.NewLine,
+            Ip = entry.Ip,
+            Hostnames = entry.Hostnames.ToArray(),
+            InlineComment = entry.Comment,
+            IsModified = true,
+        };
+    }
+
+    private HostsLine CreateNormalizedImportedLine(HostsImportEntry entry, IReadOnlyList<string> hostnames)
+    {
+        var body = $"{entry.Ip} {string.Join(' ', hostnames)}";
+        if (!string.IsNullOrWhiteSpace(entry.Comment)) body += $" # {entry.Comment.Trim()}";
+
+        return CreateImportedLine(entry with { Hostnames = hostnames, Body = body });
+    }
+
+    private static void ValidateImportEntry(HostsImportEntry entry)
+    {
+        var ipCheck = HostsValidator.ValidateIp(entry.Ip);
+        if (!ipCheck.IsValid) throw new ArgumentException(ipCheck.Error, nameof(entry));
+
+        if (entry.Hostnames.Count == 0)
+            throw new ArgumentException("An imported entry must contain at least one domain name.", nameof(entry));
+
+        foreach (var hostname in entry.Hostnames)
+        {
+            var check = HostsValidator.ValidateHostname(hostname);
+            if (!check.IsValid) throw new ArgumentException(check.Error, nameof(entry));
+        }
+
+        var commentCheck = HostsValidator.ValidateComment(entry.Comment);
+        if (!commentCheck.IsValid) throw new ArgumentException(commentCheck.Error, nameof(entry));
+    }
+
+    private static string NormalizeHostname(string hostname) => hostname.TrimEnd('.');
 
     /// <summary>
     /// Gives every line a terminator after an insert.

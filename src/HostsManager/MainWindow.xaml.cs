@@ -5,6 +5,7 @@ using System.Windows.Input;
 using HostsManager.Services;
 using HostsManager.ViewModels;
 using HostsManager.Views;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 
 namespace HostsManager;
 
@@ -24,6 +25,7 @@ public partial class MainWindow : Window
         ThemeManager.Track(this);
 
         vm.RequestAddEntry = ShowAddEntryDialog;
+        vm.RequestHostsFile = ChooseHostsFile;
         vm.ShowBackups = ShowBackupsDialog;
         vm.Confirm = (title, message) =>
             MessageBox.Show(this, message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question)
@@ -107,6 +109,19 @@ public partial class MainWindow : Window
         var dialog = new AddEntryDialog { Owner = this };
         ThemeManager.Track(dialog);
         return dialog.ShowDialog() == true ? dialog.Result : null;
+    }
+
+    private string? ChooseHostsFile(string title)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = title,
+            Filter = "Hosts files|hosts;*.hosts;*.txt|All files|*.*",
+            CheckFileExists = true,
+            Multiselect = false,
+        };
+
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
     }
 
     private void OnAbout(object sender, RoutedEventArgs e) => ShowAbout();

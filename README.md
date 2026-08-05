@@ -19,6 +19,11 @@ that kind of corruption stays invisible until something stops resolving.
   to that browser. Windows DNS, the hosts file, and your normal browser stay untouched.
 - **Add and remove entries** with live validation — you see the exact line that will be written
   before it is written.
+- **Import or merge another hosts file.** Import replaces only editable entries while preserving
+  local comments and tool-owned sections; merge adds new hostnames and skips duplicates. Both stay
+  pending until you save.
+- **Search and sort the table** without reordering the file. Search covers domains, IP addresses,
+  comments, source and status; each data column can be sorted in either direction.
 - **Flags unparseable lines** that Windows silently ignores, with the line number, so junk is
   visible and one click from being removed.
 - **Flags duplicate domains**, which Windows resolves first-match-wins, so later ones are dead.
@@ -151,6 +156,22 @@ browser has the desktop user's non-administrator token.
 
 The restore flags bypass the single-instance guard on purpose: they're what you reach for
 when something is already wrong, so they must never be refused.
+
+## Import and merge
+
+Use **More actions → Import entries** to replace the current file's editable mappings with
+the valid editable mappings from another hosts file. Comments, blank lines, unparseable text,
+and Docker/Tailscale blocks in the current file remain untouched. Tool-managed entries and
+unparseable lines from the source are reported and skipped.
+
+Use **Merge entries** to add mappings without replacing anything. A hostname already present in
+the current file — active or disabled, case-insensitively and with an optional trailing dot — is
+skipped. If an imported line contains a mixture of existing and new aliases, only its new aliases
+are added. Imported enabled/disabled state and inline comments are retained.
+
+Neither operation saves automatically. The result appears as ordinary pending changes, so it can
+be reviewed, filtered, sorted, reverted, and then committed through the same verified save pipeline
+as a hand-added entry.
 
 ## How the file is protected
 
