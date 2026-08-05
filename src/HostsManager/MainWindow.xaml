@@ -57,19 +57,38 @@
         <!-- Toolbar -->
         <Border Grid.Row="1" BorderBrush="{DynamicResource Border0}" BorderThickness="0,0,0,1" Padding="12,8">
             <Grid>
+                <!--
+                    The toolbar is for the document and nothing else: edit the list on the
+                    left, commit or discard it on the right. Anything that doesn't touch the
+                    pending edit lives behind the overflow button.
+
+                    Reload isn't here on purpose. It and Revert are the same operation, and
+                    re-reading the file only becomes the thing you want once the external
+                    change banner says the file moved underneath you — so that banner and
+                    Ctrl+R own it.
+                -->
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Add" Style="{StaticResource ToolButton}" Command="{Binding AddCommand}" />
                     <Button Content="Delete" Style="{StaticResource ToolButton}" Command="{Binding DeleteCommand}" />
-                    <Border Width="1" Background="{DynamicResource Border0}" Margin="6,2" />
-                    <Button Content="Reload" Style="{StaticResource ToolButton}" Command="{Binding ReloadCommand}" />
-                    <Button Content="Backups" Style="{StaticResource ToolButton}" Command="{Binding BackupsCommand}" />
-                    <Button Content="Flush DNS" Style="{StaticResource ToolButton}" Command="{Binding FlushDnsCommand}" />
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Revert" Style="{StaticResource ToolButton}" Command="{Binding RevertCommand}" />
                     <Button Content="Save" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}"
                             Padding="16,6" Margin="4,0,0,0" />
+                    <Border Width="1" Background="{DynamicResource Border0}" Margin="8,2" />
+                    <Button x:Name="MoreButton" Style="{StaticResource IconButton}" Click="OnMore"
+                            ToolTip="More actions">
+                        <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
+                        <Button.ContextMenu>
+                            <ContextMenu Style="{StaticResource OverflowMenu}">
+                                <MenuItem Header="Backups…" Style="{StaticResource OverflowMenuItem}"
+                                          Command="{Binding BackupsCommand}" />
+                                <MenuItem Header="Flush DNS cache" Style="{StaticResource OverflowMenuItem}"
+                                          Command="{Binding FlushDnsCommand}" />
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

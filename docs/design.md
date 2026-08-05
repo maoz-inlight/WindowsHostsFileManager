@@ -131,7 +131,12 @@ elevation, which is exactly the situation you're in when something has gone wron
 
 ## UI
 
-- Toolbar: Add, Delete, Reload, Backups, Flush DNS, Revert, Save.
+- Toolbar: Add, Delete on the left; Revert, Save on the right. It carries document
+  actions only. Backups and Flush DNS don't touch the pending edit, so they sit behind
+  an overflow menu at the right edge rather than competing with the buttons used every
+  session. Reload isn't on the toolbar at all — it's the same operation as Revert, and
+  re-reading the file only becomes the wanted action once the external-change banner
+  fires, so the banner and Ctrl+R own it.
 - Grid: toggle switch (not a checkbox — faster to scan in a dense list) | Domain | Maps
   to | Source | Status. Read-only rows show a lock icon instead of a toggle. Unparseable
   rows show their line number so they're findable in an external editor.

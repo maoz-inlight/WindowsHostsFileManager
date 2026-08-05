@@ -116,6 +116,54 @@
         </Setter>
     </Style>
 
+    <!--
+        Overflow menu for the toolbar. A real ContextMenu rather than a Popup so that
+        dismissal, Escape and keyboard navigation come for free; the shell is templated
+        to match the tray menu. HasDropShadow draws the shadow on the popup's own HWND,
+        which a DropShadowEffect inside the template would get clipped by.
+    -->
+    <Style x:Key="OverflowMenu" TargetType="ContextMenu">
+        <Setter Property="HasDropShadow" Value="True" />
+        <Setter Property="Placement" Value="Bottom" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource BorderStrong}"
+                            BorderThickness="1" CornerRadius="8" Padding="5" MinWidth="190">
+                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="OverflowMenuItem" TargetType="MenuItem">
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="Padding" Value="10,7" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="Bd" CornerRadius="6" Background="Transparent"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Surface1}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="LinkButton" TargetType="Button">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="12" />
