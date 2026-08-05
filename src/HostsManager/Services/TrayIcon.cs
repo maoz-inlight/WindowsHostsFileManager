@@ -156,12 +156,9 @@ public sealed class TrayIcon : IDisposable
         }
         catch (Exception ex)
         {
-            // Put the change back so the tray menu keeps matching the file. Toggling
-            // back re-marks the line as modified, which would leave the window claiming
-            // an unsaved change that no longer exists and cannot be saved, so the
-            // pending markers are cleared too.
+            // Put the change back so the tray menu keeps matching the file. Toggling back
+            // restores the line's saved text, so it stops counting as pending on its own.
             document.Toggle(entry);
-            document.ClearPendingMarkers();
             _viewModel.RefreshRows();
 
             System.Windows.Forms.MessageBox.Show(ex.Message, "Could not save",

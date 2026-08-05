@@ -74,7 +74,7 @@ public sealed class HostsDocument
     public void Commit()
     {
         OriginalText = Render();
-        foreach (var line in _lines) line.IsModified = false;
+        foreach (var line in _lines) line.MarkCommitted();
     }
 
     // ---- mutations -------------------------------------------------------
@@ -85,8 +85,9 @@ public sealed class HostsDocument
         if (!line.IsEntry) throw new InvalidOperationException("Only entries can be enabled or disabled.");
         if (line.IsEnabled == enabled) return;
 
+        // No pending flag to set: the line's own render now differs from its committed
+        // text, and toggling straight back makes it match again.
         line.Kind = enabled ? LineKind.Entry : LineKind.DisabledEntry;
-        line.IsModified = true;
     }
 
     public void Toggle(HostsLine line) => SetEnabled(line, !line.IsEnabled);
@@ -109,10 +110,9 @@ public sealed class HostsDocument
         foreach (var line in selected)
         {
             line.GroupName = normalized;
-            line.IsModified = true;
         }
         RebuildGroupMarkers();
-        if (!IsDirty) ClearPendingMarkers();
+        SettleIfUnchanged();
     }
 
     public int SetGroupEnabled(string groupName, bool enabled)
@@ -149,9 +149,9 @@ public sealed class HostsDocument
         foreach (var line in matches)
         {
             line.GroupName = replacement;
-            line.IsModified = true;
         }
         RebuildGroupMarkers();
+        SettleIfUnchanged();
     }
 
     /// <summary>Removes a group but deliberately keeps all of its entries.</summary>
@@ -161,19 +161,6 @@ public sealed class HostsDocument
         var matches = Entries.Where(line => !line.IsReadOnly &&
             string.Equals(line.GroupName, normalized, StringComparison.OrdinalIgnoreCase)).ToArray();
         AssignGroup(matches, null);
-    }
-
-    /// <summary>
-    /// Drops the pending markers without touching content, for a caller that has just
-    /// undone its own change. Guarded by the dirty check so it can only ever be used to
-    /// describe a document that genuinely matches its committed baseline.
-    /// </summary>
-    public void ClearPendingMarkers()
-    {
-        if (IsDirty)
-            throw new InvalidOperationException("The document still differs from the saved file.");
-
-        foreach (var line in _lines) line.IsModified = false;
     }
 
     /// <summary>
@@ -206,13 +193,13 @@ public sealed class HostsDocument
             Ip = ip,
             Hostnames = hostnames.ToList(),
             InlineComment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim(),
-            IsModified = true,
         };
 
         var insertAt = UserEntryInsertIndex();
         _lines.Insert(insertAt, line);
 
         EnsureLineSeparators();
+        SettleIfUnchanged();
         return line;
     }
 
@@ -239,6 +226,7 @@ public sealed class HostsDocument
         _lines.InsertRange(insertAt, replacements);
         RebuildGroupMarkers();
         EnsureLineSeparators();
+        SettleIfUnchanged();
         return editableEntryCount;
     }
 
@@ -282,6 +270,7 @@ public sealed class HostsDocument
         _lines.InsertRange(insertAt, additions);
         if (additions.Count > 0) RebuildGroupMarkers();
         EnsureLineSeparators();
+        SettleIfUnchanged();
 
         return new HostsMergeResult(additions.Count, addedHostnames, skippedHostnames);
     }
@@ -300,6 +289,7 @@ public sealed class HostsDocument
 
         _lines.RemoveAt(index);
         if (line.IsEntry && line.GroupName is not null) RebuildGroupMarkers();
+        SettleIfUnchanged();
     }
 
     // ---- analysis --------------------------------------------------------
@@ -329,6 +319,25 @@ public sealed class HostsDocument
     }
 
     // ---- internals -------------------------------------------------------
+
+    /// <summary>
+    /// Keeps the promise that a document matching the file on disk has nothing pending.
+    /// <para>
+    /// A line compares itself against its own committed text, which settles a toggle that
+    /// was undone (see <see cref="HostsLine.IsModified"/>) but cannot settle a line that
+    /// was inserted, because a new line has no committed text to compare against. When
+    /// inserts and removals happen to add back up to the file already on disk — importing
+    /// a file identical to the current one — only the document can see it. Without this,
+    /// the window would report unsaved changes while Save sat correctly disabled, since
+    /// <see cref="IsDirty"/> says there is nothing to write.
+    /// </para>
+    /// </summary>
+    private void SettleIfUnchanged()
+    {
+        if (IsDirty) return;
+
+        foreach (var line in _lines) line.MarkCommitted();
+    }
 
     private void Guard(HostsLine line)
     {
@@ -373,7 +382,6 @@ public sealed class HostsDocument
             Hostnames = entry.Hostnames.ToArray(),
             InlineComment = entry.Comment,
             GroupName = entry.GroupName is null ? null : HostsGroups.NormalizeName(entry.GroupName),
-            IsModified = true,
         };
     }
 
@@ -444,7 +452,6 @@ public sealed class HostsDocument
         Terminator = Format.NewLine,
         GroupName = name,
         GroupMarker = GroupMarkerKind.Start,
-        IsModified = true,
     };
 
     private HostsLine CreateGroupEnd(string name) => new()
@@ -454,7 +461,6 @@ public sealed class HostsDocument
         Terminator = Format.NewLine,
         GroupName = name,
         GroupMarker = GroupMarkerKind.End,
-        IsModified = true,
     };
 
     /// <summary>

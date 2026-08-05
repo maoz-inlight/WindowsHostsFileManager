@@ -75,8 +75,33 @@ public sealed class HostsLine
 
     public bool IsEnabled => Kind == LineKind.Entry;
 
-    /// <summary>True once this line has been toggled, edited or newly added in this session.</summary>
-    public bool IsModified { get; internal set; }
+    /// <summary>
+    /// The line's rendered text as of the last load or save, or null for a line added in
+    /// this session. Comparing against it — rather than latching a flag when a mutation
+    /// runs — is what makes undoing an edit actually undo it: toggling an entry off and
+    /// back on leaves the line byte-identical to the file, so it stops being pending.
+    /// A latched flag would leave the row marked "Pending" and the header claiming an
+    /// unsaved change that no save could ever clear, because there is nothing to write.
+    /// </summary>
+    private string? _committedRender;
+
+    /// <summary>
+    /// Group membership is rendered by neighboring marker lines rather than by the entry
+    /// itself, so its saved value is tracked separately for the row's pending state.
+    /// </summary>
+    private string? _committedGroupName;
+
+    /// <summary>True while this line differs from the file: toggled, edited or newly added.</summary>
+    public bool IsModified => _committedRender is null ||
+        _committedRender != Render() ||
+        !string.Equals(_committedGroupName, GroupName, StringComparison.Ordinal);
+
+    /// <summary>Accepts the current text as this line's on-disk state, after a load or a save.</summary>
+    internal void MarkCommitted()
+    {
+        _committedRender = Render();
+        _committedGroupName = GroupName;
+    }
 
     /// <summary>The primary hostname, used for display and duplicate detection.</summary>
     public string? PrimaryHostname => Hostnames.Count > 0 ? Hostnames[0] : null;

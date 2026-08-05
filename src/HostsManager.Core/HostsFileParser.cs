@@ -35,6 +35,10 @@ public static partial class HostsFileParser
         ApplyManagedSections(lines, raws, markers);
         ApplyGroups(lines, raws);
 
+        // Everything just read is by definition what is on disk, so it is the baseline
+        // each line is compared against to decide whether it has a pending change.
+        foreach (var line in lines) line.MarkCommitted();
+
         return new HostsDocument(lines, format, text, docLines);
     }
 

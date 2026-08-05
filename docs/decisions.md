@@ -155,9 +155,8 @@ A structured review after the initial tray/theme/installer work found and fixed:
 - **A failed tray toggle left a phantom unsaved-change count.** Reverting the toggle
   after a failed save re-marked the line as modified, so the header could claim "1
   unsaved change" that had no corresponding content difference and could never actually
-  be saved. `HostsDocument.ClearPendingMarkers()` was added specifically for this revert
-  path, guarded so it can only be called when the document's rendered content already
-  matches its saved baseline.
+  be saved. Patched at the time with a `ClearPendingMarkers()` call on the revert path;
+  see *Pending is a comparison, not a flag* below for why that patch was later replaced.
 - **The single-instance listener thread could fault the process on exit.** `Dispose()`
   disposed its wait handles immediately after signalling cancellation, racing a listener
   thread that might already be past its cancellation check and about to wait on those
@@ -174,6 +173,42 @@ A structured review after the initial tray/theme/installer work found and fixed:
 
 Each of these has a regression test named after the scenario in `tests/HostsManager.
 Tests/RegressionTests.cs`, so the fix is pinned rather than just narratively described.
+
+## Pending is a comparison, not a flag
+
+The phantom-unsaved-change bug above came back through the front door: disable an entry in
+the window, change your mind, enable it again, and the row sat there reading "Pending"
+with the header claiming an unsaved change — while Save was correctly greyed out, because
+the document matched the file and there was genuinely nothing to write. Two parts of the
+UI disagreeing about whether there was work to do, with no way to resolve it but a reload.
+
+The tray had already hit this and been patched locally, which is what gave it away: the
+fault was never in either call site but in `HostsLine.IsModified` being a flag that
+mutations latched to `true` and only a save could clear. A flag records that something
+*happened*; the question the UI actually asks is whether the line *differs* from the file.
+Those come apart the moment an edit is undone, and every mutation path had to remember to
+un-latch — the tray remembered, the grid didn't.
+
+So each line now keeps its rendered text as of the last load or save, and `IsModified`
+compares against it. Undo becomes self-correcting everywhere at once: toggling back
+restores the line's exact original bytes — including a captured disable prefix like
+`#\t`, which is why the round-trip is byte-exact and not merely equivalent — so the line
+stops differing and stops being pending, with no call site involved. `ClearPendingMarkers`
+existed only to un-latch the flag and was deleted with it.
+
+The comparison is per line, not per document, which is the property the document-level
+`IsDirty` check could not have given: undoing one of two pending toggles clears that row
+and leaves the other one pending, rather than clearing both or neither.
+
+There is exactly one thing a line cannot settle on its own: a line that was *inserted* has
+no committed text to compare against, so it is pending by construction — right up until
+the inserts and removals add back up to the file already on disk, which importing a file
+identical to the current one does. Only the document can see that, so the mutations that
+change the line list end with `SettleIfUnchanged()`, which re-baselines everything when
+`IsDirty` says there is nothing left to write. That is the invariant the whole section is
+really about, and it is worth stating plainly: **the header may never claim unsaved
+changes that Save is disabled for.** Those two came from different sources, and the bug
+was visible precisely where they disagreed.
 
 ## The install experience: two things that looked fine and weren't
 
