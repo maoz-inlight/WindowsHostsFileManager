@@ -45,6 +45,10 @@ public sealed class EntryViewModel : Observable
 
     public string Source => Line.ManagedBy ?? (IsUnparseable ? "Unknown" : "You");
 
+    public string Group => Line.GroupName ?? "—";
+
+    public string? GroupName => Line.GroupName;
+
     public string? Comment => Line.InlineComment;
 
     public bool IsEnabled
@@ -93,6 +97,8 @@ public sealed class EntryViewModel : Observable
     public void Refresh()
     {
         Raise(nameof(IsEnabled));
+        Raise(nameof(Group));
+        Raise(nameof(GroupName));
         Raise(nameof(StatusText));
         Raise(nameof(State));
         Raise(nameof(Tooltip));

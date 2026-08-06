@@ -9,10 +9,24 @@ namespace HostsManager.ViewModels;
 
 public sealed record AddEntryRequest(string Ip, IReadOnlyList<string> Hostnames, string? Comment);
 
+public sealed record GroupSummary(string Name, int EntryCount, int EnabledCount)
+{
+    public string CountText => EntryCount == 1 ? "1 entry" : $"{EntryCount} entries";
+    public string StatusText => EnabledCount switch
+    {
+        0 => "Disabled",
+        _ when EnabledCount == EntryCount => "Enabled",
+        _ => $"Mixed · {EnabledCount} enabled",
+    };
+}
+
 public enum EntryFilter { All, Loopback, Problems }
 
 public sealed class MainViewModel : Observable, IDisposable
 {
+    public const string AllGroupsLabel = "All groups";
+    public const string UngroupedLabel = "Ungrouped";
+
     private readonly HostsFileWriter _writer;
     private FileSystemWatcher? _watcher;
 
@@ -26,6 +40,7 @@ public sealed class MainViewModel : Observable, IDisposable
         _writer = writer;
 
         Entries = new ObservableCollection<EntryViewModel>();
+        GroupOptions = new ObservableCollection<string> { AllGroupsLabel, UngroupedLabel };
         EntriesView = CollectionViewSource.GetDefaultView(Entries);
         EntriesView.Filter = o => Matches((EntryViewModel)o);
 
@@ -38,6 +53,7 @@ public sealed class MainViewModel : Observable, IDisposable
         BackupsCommand = new RelayCommand(() => ShowBackups?.Invoke());
         ImportCommand = new RelayCommand(ImportEntries);
         MergeCommand = new RelayCommand(MergeEntries);
+        GroupsCommand = new RelayCommand(() => ShowGroups?.Invoke());
         ToggleCommand = new RelayCommand(ToggleSelected, () => SelectedEntry is { CanToggle: true });
         ShowProblemsCommand = new RelayCommand(() => Filter = EntryFilter.Problems);
         DeleteRowCommand = new RelayCommand(o => DeleteEntry(o as EntryViewModel));
@@ -52,6 +68,7 @@ public sealed class MainViewModel : Observable, IDisposable
     public Func<AddEntryRequest?>? RequestAddEntry { get; set; }
     public Func<string, string?>? RequestHostsFile { get; set; }
     public Action? ShowBackups { get; set; }
+    public Action? ShowGroups { get; set; }
     public Func<string, string, bool>? Confirm { get; set; }
     public Action<string, string>? ShowError { get; set; }
     public Action<IReadOnlyList<EntryViewModel>>? RequestOpenIsolatedBrowser { get; set; }
@@ -60,6 +77,7 @@ public sealed class MainViewModel : Observable, IDisposable
     // ---- state ------------------------------------------------------------
 
     public ObservableCollection<EntryViewModel> Entries { get; }
+    public ObservableCollection<string> GroupOptions { get; }
     public ICollectionView EntriesView { get; }
 
     public HostsFileWriter Writer => _writer;
@@ -73,6 +91,7 @@ public sealed class MainViewModel : Observable, IDisposable
     public RelayCommand BackupsCommand { get; }
     public RelayCommand ImportCommand { get; }
     public RelayCommand MergeCommand { get; }
+    public RelayCommand GroupsCommand { get; }
     public RelayCommand ToggleCommand { get; }
     public RelayCommand ShowProblemsCommand { get; }
     public RelayCommand OpenIsolatedBrowserCommand { get; }
@@ -136,6 +155,13 @@ public sealed class MainViewModel : Observable, IDisposable
     {
         get => _filter;
         set { if (Set(ref _filter, value)) EntriesView.Refresh(); }
+    }
+
+    private string _selectedGroup = AllGroupsLabel;
+    public string SelectedGroup
+    {
+        get => _selectedGroup;
+        set { if (Set(ref _selectedGroup, value ?? AllGroupsLabel)) EntriesView.Refresh(); }
     }
 
     public string StatusMessage
@@ -468,8 +494,65 @@ public sealed class MainViewModel : Observable, IDisposable
 
     private void OnDocumentChanged()
     {
+        foreach (var entry in Entries) entry.Refresh();
+        RefreshGroupOptions();
         RaiseAll();
         EntriesView.Refresh();
+    }
+
+    public IReadOnlyList<GroupSummary> GetGroupSummaries()
+    {
+        var doc = _writer.Document;
+        if (doc is null) return Array.Empty<GroupSummary>();
+
+        return doc.Entries
+            .Where(line => !line.IsReadOnly && line.GroupName is not null)
+            .GroupBy(line => line.GroupName!, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new GroupSummary(group.First().GroupName!, group.Count(), group.Count(line => line.IsEnabled)))
+            .OrderBy(group => group.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    public void AssignEntriesToGroup(IEnumerable<EntryViewModel> entries, string groupName)
+    {
+        var doc = _writer.Document ?? throw new InvalidOperationException("No hosts file is loaded.");
+        doc.AssignGroup(entries.Where(entry => entry.CanToggle).Select(entry => entry.Line), groupName);
+        StatusMessage = $"Assigned selected entries to {HostsGroups.NormalizeName(groupName)}.";
+        OnDocumentChanged();
+    }
+
+    public void RemoveEntriesFromGroups(IEnumerable<EntryViewModel> entries)
+    {
+        var doc = _writer.Document ?? throw new InvalidOperationException("No hosts file is loaded.");
+        doc.AssignGroup(entries.Where(entry => entry.CanToggle).Select(entry => entry.Line), null);
+        StatusMessage = "Removed selected entries from their groups.";
+        OnDocumentChanged();
+    }
+
+    public void SetGroupEnabled(string groupName, bool enabled)
+    {
+        var doc = _writer.Document ?? throw new InvalidOperationException("No hosts file is loaded.");
+        var changed = doc.SetGroupEnabled(groupName, enabled);
+        StatusMessage = changed == 0
+            ? $"{groupName} was already {(enabled ? "enabled" : "disabled")}."
+            : $"{(enabled ? "Enabled" : "Disabled")} {Count(changed, "entry", "entries")} in {groupName}.";
+        OnDocumentChanged();
+    }
+
+    public void RenameGroup(string currentName, string newName)
+    {
+        var doc = _writer.Document ?? throw new InvalidOperationException("No hosts file is loaded.");
+        doc.RenameGroup(currentName, newName);
+        StatusMessage = $"Renamed {currentName} to {HostsGroups.NormalizeName(newName)}.";
+        OnDocumentChanged();
+    }
+
+    public void DeleteGroup(string groupName)
+    {
+        var doc = _writer.Document ?? throw new InvalidOperationException("No hosts file is loaded.");
+        doc.DeleteGroup(groupName);
+        StatusMessage = $"Deleted {groupName}; its entries are now ungrouped.";
+        OnDocumentChanged();
     }
 
     /// <summary>Re-reads row state from the model without rebuilding the list.</summary>
@@ -503,7 +586,22 @@ public sealed class MainViewModel : Observable, IDisposable
             });
         }
 
+        RefreshGroupOptions();
         EntriesView.Refresh();
+    }
+
+    private void RefreshGroupOptions()
+    {
+        var previous = SelectedGroup;
+        var groups = _writer.Document?.Groups ?? Array.Empty<string>();
+
+        GroupOptions.Clear();
+        GroupOptions.Add(AllGroupsLabel);
+        GroupOptions.Add(UngroupedLabel);
+        foreach (var group in groups) GroupOptions.Add(group);
+
+        SelectedGroup = GroupOptions.FirstOrDefault(option =>
+            string.Equals(option, previous, StringComparison.OrdinalIgnoreCase)) ?? AllGroupsLabel;
     }
 
     public void RaiseAll()
@@ -525,6 +623,20 @@ public sealed class MainViewModel : Observable, IDisposable
         if (_filter == EntryFilter.Loopback && !IsLoopback(entry.Line.Ip)) return false;
         if (_filter == EntryFilter.Problems && !entry.IsUnparseable && !entry.IsShadowed) return false;
 
+        if (!string.Equals(_selectedGroup, AllGroupsLabel, StringComparison.Ordinal))
+        {
+            if (string.Equals(_selectedGroup, UngroupedLabel, StringComparison.Ordinal))
+            {
+                // Managed and invalid rows cannot be assigned, so they are not part of
+                // the user's "Ungrouped" bucket even though they have no group metadata.
+                if (entry.GroupName is not null || !entry.CanToggle) return false;
+            }
+            else if (!string.Equals(entry.GroupName, _selectedGroup, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(_search)) return true;
 
         var searchable = string.Join('\n', new[]
@@ -533,6 +645,7 @@ public sealed class MainViewModel : Observable, IDisposable
             entry.MapsTo,
             entry.Comment ?? "",
             entry.Source,
+            entry.Group,
             entry.StatusText,
             entry.Line.Render(),
         });

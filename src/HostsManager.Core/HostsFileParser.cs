@@ -33,6 +33,7 @@ public static partial class HostsFileParser
         }
 
         ApplyManagedSections(lines, raws, markers);
+        ApplyGroups(lines, raws);
 
         return new HostsDocument(lines, format, text, docLines);
     }
@@ -51,7 +52,14 @@ public static partial class HostsFileParser
     private static int ComputeLeadingDocLines(List<(string Raw, string Terminator)> raws)
     {
         var n = 0;
-        while (n < raws.Count && raws[n].Raw.TrimStart().StartsWith('#')) n++;
+        while (n < raws.Count && raws[n].Raw.TrimStart().StartsWith('#'))
+        {
+            // A group made only of disabled entries is also a run of comments. Its
+            // marker must stop the Windows-boilerplate heuristic or the entries would
+            // be mistaken for documentation and disappear from the grid.
+            if (HostsGroups.TryMatchStart(raws[n].Raw, out _) || HostsGroups.IsEnd(raws[n].Raw)) break;
+            n++;
+        }
 
         if (n < 3) return 0;
         if (n >= raws.Count || !string.IsNullOrWhiteSpace(raws[n].Raw)) return 0;
@@ -155,6 +163,38 @@ public static partial class HostsFileParser
 
             lines[i].ManagedBy = current.Owner;
             if (ManagedSections.MatchesEnd(raw, current)) current = null;
+        }
+    }
+
+    private static void ApplyGroups(List<HostsLine> lines, List<(string Raw, string Terminator)> raws)
+    {
+        string? current = null;
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var line = lines[i];
+            var raw = raws[i].Raw;
+
+            // Comments inside blocks owned by another tool are its data, not ours.
+            if (line.IsReadOnly) continue;
+
+            if (current is null && HostsGroups.TryMatchStart(raw, out var name))
+            {
+                current = name;
+                line.GroupMarker = GroupMarkerKind.Start;
+                line.GroupName = name;
+                continue;
+            }
+
+            if (current is not null && HostsGroups.IsEnd(raw))
+            {
+                line.GroupMarker = GroupMarkerKind.End;
+                line.GroupName = current;
+                current = null;
+                continue;
+            }
+
+            if (current is not null && line.IsEntry) line.GroupName = current;
         }
     }
 

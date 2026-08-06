@@ -27,6 +27,7 @@ public partial class MainWindow : Window
         vm.RequestAddEntry = ShowAddEntryDialog;
         vm.RequestHostsFile = ChooseHostsFile;
         vm.ShowBackups = ShowBackupsDialog;
+        vm.ShowGroups = ShowGroupsDialog;
         vm.Confirm = (title, message) =>
             MessageBox.Show(this, message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question)
             == MessageBoxResult.OK;
@@ -155,6 +156,13 @@ public partial class MainWindow : Window
 
         if (dialog.Restored) _vm.Reload(discardChanges: true);
         _vm.RaiseAll();
+    }
+
+    private void ShowGroupsDialog()
+    {
+        var dialog = new GroupsDialog(_vm, _vm.SelectedEntries) { Owner = this };
+        ThemeManager.Track(dialog);
+        dialog.ShowDialog();
     }
 
     private void OnFilterChanged(object sender, SelectionChangedEventArgs e)

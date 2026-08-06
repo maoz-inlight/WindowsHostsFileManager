@@ -7,7 +7,8 @@ public sealed record HostsImportEntry(
     string? Comment,
     bool IsEnabled,
     string Body,
-    string DisablePrefix);
+    string DisablePrefix,
+    string? GroupName = null);
 
 /// <summary>The importable portion of another hosts file, plus anything deliberately ignored.</summary>
 public sealed record HostsImportFile(
@@ -51,7 +52,8 @@ public static class HostsImportReader
                 line.InlineComment,
                 line.IsEnabled,
                 line.Body,
-                line.DisablePrefix))
+                line.DisablePrefix,
+                line.GroupName))
             .ToArray();
 
         return new HostsImportFile(

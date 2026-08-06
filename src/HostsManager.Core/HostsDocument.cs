@@ -38,6 +38,13 @@ public sealed class HostsDocument
 
     public IEnumerable<HostsLine> UnparseableLines => _lines.Where(l => l.Kind == LineKind.Unparseable);
 
+    public IReadOnlyList<string> Groups => Entries
+        .Where(line => !string.IsNullOrWhiteSpace(line.GroupName))
+        .Select(line => line.GroupName!)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
     public bool IsDirty => Render() != OriginalText;
 
     public int ModifiedCount => _lines.Count(l => l.IsModified);
@@ -83,6 +90,78 @@ public sealed class HostsDocument
     }
 
     public void Toggle(HostsLine line) => SetEnabled(line, !line.IsEnabled);
+
+    /// <summary>Assigns editable entries to one group without reordering their mappings.</summary>
+    public void AssignGroup(IEnumerable<HostsLine> lines, string? groupName)
+    {
+        var selected = lines.Distinct().ToArray();
+        var normalized = groupName is null ? null : HostsGroups.NormalizeName(groupName);
+
+        foreach (var line in selected)
+        {
+            Guard(line);
+            if (!line.IsEntry) throw new InvalidOperationException("Only hosts entries can be grouped.");
+        }
+
+        if (selected.Length == 0 || selected.All(line =>
+                string.Equals(line.GroupName, normalized, StringComparison.OrdinalIgnoreCase))) return;
+
+        foreach (var line in selected)
+        {
+            line.GroupName = normalized;
+            line.IsModified = true;
+        }
+        RebuildGroupMarkers();
+        if (!IsDirty) ClearPendingMarkers();
+    }
+
+    public int SetGroupEnabled(string groupName, bool enabled)
+    {
+        var normalized = HostsGroups.NormalizeName(groupName);
+        var changed = 0;
+
+        foreach (var line in Entries.Where(line => !line.IsReadOnly &&
+                     string.Equals(line.GroupName, normalized, StringComparison.OrdinalIgnoreCase)))
+        {
+            if (line.IsEnabled == enabled) continue;
+            SetEnabled(line, enabled);
+            changed++;
+        }
+
+        return changed;
+    }
+
+    public void RenameGroup(string currentName, string newName)
+    {
+        var current = HostsGroups.NormalizeName(currentName);
+        var replacement = HostsGroups.NormalizeName(newName);
+        var matches = Entries.Where(line => !line.IsReadOnly &&
+            string.Equals(line.GroupName, current, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (matches.Length == 0) throw new InvalidOperationException($"Group '{current}' no longer exists.");
+
+        var collision = Groups.Any(name =>
+            !string.Equals(name, current, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(name, replacement, StringComparison.OrdinalIgnoreCase));
+        if (collision) throw new ArgumentException($"A group named '{replacement}' already exists.", nameof(newName));
+
+        if (string.Equals(current, replacement, StringComparison.Ordinal)) return;
+
+        foreach (var line in matches)
+        {
+            line.GroupName = replacement;
+            line.IsModified = true;
+        }
+        RebuildGroupMarkers();
+    }
+
+    /// <summary>Removes a group but deliberately keeps all of its entries.</summary>
+    public void DeleteGroup(string groupName)
+    {
+        var normalized = HostsGroups.NormalizeName(groupName);
+        var matches = Entries.Where(line => !line.IsReadOnly &&
+            string.Equals(line.GroupName, normalized, StringComparison.OrdinalIgnoreCase)).ToArray();
+        AssignGroup(matches, null);
+    }
 
     /// <summary>
     /// Drops the pending markers without touching content, for a caller that has just
@@ -145,9 +224,10 @@ public sealed class HostsDocument
     public int ReplaceUserEntries(IEnumerable<HostsImportEntry> entries)
     {
         var replacements = entries.Select(CreateImportedLine).ToList();
+        var editableEntryCount = _lines.Count(line => line.IsEntry && !line.IsReadOnly);
         var editableIndices = _lines
             .Select((line, index) => (line, index))
-            .Where(item => item.line.IsEntry && !item.line.IsReadOnly)
+            .Where(item => (item.line.IsEntry && !item.line.IsReadOnly) || item.line.IsGroupMarker)
             .Select(item => item.index)
             .ToArray();
 
@@ -157,8 +237,9 @@ public sealed class HostsDocument
 
         insertAt = Math.Clamp(insertAt, 0, _lines.Count);
         _lines.InsertRange(insertAt, replacements);
+        RebuildGroupMarkers();
         EnsureLineSeparators();
-        return editableIndices.Length;
+        return editableEntryCount;
     }
 
     /// <summary>
@@ -199,6 +280,7 @@ public sealed class HostsDocument
 
         var insertAt = UserEntryInsertIndex();
         _lines.InsertRange(insertAt, additions);
+        if (additions.Count > 0) RebuildGroupMarkers();
         EnsureLineSeparators();
 
         return new HostsMergeResult(additions.Count, addedHostnames, skippedHostnames);
@@ -217,6 +299,7 @@ public sealed class HostsDocument
             _lines[index - 1].Terminator = line.Terminator;
 
         _lines.RemoveAt(index);
+        if (line.IsEntry && line.GroupName is not null) RebuildGroupMarkers();
     }
 
     // ---- analysis --------------------------------------------------------
@@ -249,6 +332,8 @@ public sealed class HostsDocument
 
     private void Guard(HostsLine line)
     {
+        if (!_lines.Contains(line))
+            throw new InvalidOperationException("This line does not belong to the current hosts file.");
         if (line.IsReadOnly)
             throw new InvalidOperationException($"This entry is managed by {line.ManagedBy} and cannot be changed here.");
     }
@@ -256,7 +341,19 @@ public sealed class HostsDocument
     private int UserEntryInsertIndex()
     {
         for (var i = _lines.Count - 1; i >= 0; i--)
-            if (_lines[i].IsEntry && !_lines[i].IsReadOnly) return i + 1;
+        {
+            if (!_lines[i].IsEntry || _lines[i].IsReadOnly) continue;
+
+            if (_lines[i].GroupName is not null)
+            {
+                for (var j = i + 1; j < _lines.Count; j++)
+                    if (_lines[j].GroupMarker == GroupMarkerKind.End &&
+                        string.Equals(_lines[j].GroupName, _lines[i].GroupName,
+                            StringComparison.OrdinalIgnoreCase)) return j + 1;
+            }
+
+            return i + 1;
+        }
 
         var firstManaged = _lines.FindIndex(line => line.IsReadOnly);
         return firstManaged >= 0 ? firstManaged : _lines.Count;
@@ -275,6 +372,7 @@ public sealed class HostsDocument
             Ip = entry.Ip,
             Hostnames = entry.Hostnames.ToArray(),
             InlineComment = entry.Comment,
+            GroupName = entry.GroupName is null ? null : HostsGroups.NormalizeName(entry.GroupName),
             IsModified = true,
         };
     }
@@ -306,6 +404,58 @@ public sealed class HostsDocument
     }
 
     private static string NormalizeHostname(string hostname) => hostname.TrimEnd('.');
+
+    private void RebuildGroupMarkers()
+    {
+        var content = _lines.Where(line => !line.IsGroupMarker).ToArray();
+        var rebuilt = new List<HostsLine>(content.Length + 8);
+        string? openGroup = null;
+
+        foreach (var line in content)
+        {
+            var lineGroup = line.IsEntry && !line.IsReadOnly ? line.GroupName : null;
+
+            if (!string.Equals(openGroup, lineGroup, StringComparison.OrdinalIgnoreCase))
+            {
+                if (openGroup is not null) rebuilt.Add(CreateGroupEnd(openGroup));
+                openGroup = null;
+
+                if (lineGroup is not null)
+                {
+                    rebuilt.Add(CreateGroupStart(lineGroup));
+                    openGroup = lineGroup;
+                }
+            }
+
+            rebuilt.Add(line);
+        }
+
+        if (openGroup is not null) rebuilt.Add(CreateGroupEnd(openGroup));
+
+        _lines.Clear();
+        _lines.AddRange(rebuilt);
+        EnsureLineSeparators();
+    }
+
+    private HostsLine CreateGroupStart(string name) => new()
+    {
+        Kind = LineKind.Comment,
+        Body = HostsGroups.RenderStart(name),
+        Terminator = Format.NewLine,
+        GroupName = name,
+        GroupMarker = GroupMarkerKind.Start,
+        IsModified = true,
+    };
+
+    private HostsLine CreateGroupEnd(string name) => new()
+    {
+        Kind = LineKind.Comment,
+        Body = HostsGroups.EndMarker,
+        Terminator = Format.NewLine,
+        GroupName = name,
+        GroupMarker = GroupMarkerKind.End,
+        IsModified = true,
+    };
 
     /// <summary>
     /// Gives every line a terminator after an insert.

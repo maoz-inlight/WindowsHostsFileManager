@@ -61,6 +61,14 @@ public sealed class HostsLine
     /// <summary>Owner of the managed block this line sits in ("Docker", "Tailscale"), else null.</summary>
     public string? ManagedBy { get; internal set; }
 
+    /// <summary>User-defined group carried by HostsManager comment markers, else null.</summary>
+    public string? GroupName { get; internal set; }
+
+    /// <summary>Identifies a portable HostsManager group delimiter comment.</summary>
+    public GroupMarkerKind GroupMarker { get; internal set; }
+
+    public bool IsGroupMarker => GroupMarker != GroupMarkerKind.None;
+
     public bool IsReadOnly => ManagedBy is not null;
 
     public bool IsEntry => Kind is LineKind.Entry or LineKind.DisabledEntry;
