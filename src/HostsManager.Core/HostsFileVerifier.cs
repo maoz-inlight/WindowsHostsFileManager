@@ -67,6 +67,10 @@ public static class HostsFileVerifier
             if (a.ManagedBy != b.ManagedBy)
                 throw new HostsVerificationException(
                     $"Line {i + 1} changed ownership: expected {a.ManagedBy ?? "none"}, got {b.ManagedBy ?? "none"}.");
+
+            if (!string.Equals(a.GroupName, b.GroupName, StringComparison.Ordinal) || a.GroupMarker != b.GroupMarker)
+                throw new HostsVerificationException(
+                    $"Line {i + 1} changed group metadata during render.");
         }
     }
 

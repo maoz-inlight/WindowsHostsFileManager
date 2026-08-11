@@ -22,8 +22,11 @@ that kind of corruption stays invisible until something stops resolving.
 - **Import or merge another hosts file.** Import replaces only editable entries while preserving
   local comments and tool-owned sections; merge adds new hostnames and skips duplicates. Both stay
   pending until you save.
+- **Organize entries into groups** such as Work or Local development. Groups can be filtered,
+  searched, renamed, and enabled or disabled together; they travel with the hosts file as harmless
+  namespaced comments.
 - **Search and sort the table** without reordering the file. Search covers domains, IP addresses,
-  comments, source and status; each data column can be sorted in either direction.
+  comments, source, group and status; each data column can be sorted in either direction.
 - **Flags unparseable lines** that Windows silently ignores, with the line number, so junk is
   visible and one click from being removed.
 - **Flags duplicate domains**, which Windows resolves first-match-wins, so later ones are dead.
@@ -172,6 +175,29 @@ are added. Imported enabled/disabled state and inline comments are retained.
 Neither operation saves automatically. The result appears as ordinary pending changes, so it can
 be reviewed, filtered, sorted, reverted, and then committed through the same verified save pipeline
 as a hand-added entry.
+
+## Groups
+
+Select one or more editable entries and choose **Groups** in the toolbar. From there, create a group,
+assign the selection to an existing group, or remove it from its current group. The same dialog shows
+whether every group is enabled, disabled, or mixed, and can enable or disable every member together.
+Deleting a group never deletes its entries; they simply become ungrouped.
+
+The Group dropdown combines with the existing text and problem/loopback filters. Source remains a
+separate concept: it shows who owns an entry, while Group is user-defined organization. Entries owned
+by Docker Desktop or Tailscale remain read-only and cannot be grouped.
+
+Groups are portable because they are stored as comments Windows already ignores:
+
+```text
+# HostsManager: group Local development
+127.0.0.1 api.local
+#127.0.0.1 old-api.local
+# HostsManager: end-group
+```
+
+Imported and merged files containing these markers preserve their groups. Ordinary hosts files work
+as before and their entries arrive ungrouped.
 
 ## How the file is protected
 
