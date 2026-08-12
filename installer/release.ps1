@@ -138,7 +138,7 @@ try {
         & (Join-Path $PSScriptRoot 'build.ps1') -Version $Version
 
         $assets = @('x64', 'x86', 'arm64') |
-            ForEach-Object { "HostsManager-$_.msi", "HostsManager-$_.exe" } |
+            ForEach-Object { "HostsManager-$Version-$_-Setup.msi", "HostsManager-$Version-$_-Portable.exe" } |
             ForEach-Object {
                 $path = Join-Path $distRoot $_
                 if (-not (Test-Path $path)) { Fail "build.ps1 did not produce $_" }

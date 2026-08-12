@@ -286,6 +286,13 @@ going to show install UI, because it isn't an installer — no Program Files ent
 Start Menu shortcut, nothing to wizard through, by design. Confirmed once the right file
 (`HostsManager-arm64.msi`) was run: it showed the full wizard correctly.
 
+The artifact names later followed from the same incident: they are now
+`HostsManager-<version>-<arch>-Setup.msi` and `HostsManager-<version>-<arch>-Portable.exe`
+rather than `HostsManager-<arch>.msi`/`.exe`. A file in Downloads is separated from the
+release page that explained it, so the name has to carry both facts on its own — which
+build it is, and whether it installs anything. The version also makes a stale download
+self-evident, which the `v1.0.0` case above was not.
+
 Two changes followed from this, neither a code fix: the README's Installing section now
 states the `.msi`/`.exe` distinction up front rather than mentioning the portable build
 as an aside, and calls out that an unsigned, un-code-signed build will trigger a
