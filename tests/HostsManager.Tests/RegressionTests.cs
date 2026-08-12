@@ -131,8 +131,13 @@ public class RegressionTests
 
     // ---- pending markers --------------------------------------------------
 
+    /// <summary>
+    /// Disabling an entry and enabling it again used to latch the line as modified, so the
+    /// row showed "Pending" and the header claimed an unsaved change — one that Save was
+    /// disabled for, because the document matched the file and there was nothing to write.
+    /// </summary>
     [Fact]
-    public void ClearPendingMarkers_ResetsAnUndoneToggle()
+    public void UndoingAToggleLeavesNothingPending()
     {
         var doc = Fixture.Parse();
         var entry = doc.Entries.First(e => e.PrimaryHostname == "ics.local");
@@ -140,22 +145,108 @@ public class RegressionTests
         doc.Toggle(entry);
         doc.Toggle(entry);
 
-        // Toggling back leaves the content clean but the line still flagged, which is
-        // what made the window report an unsaved change that could not be saved.
         Assert.False(doc.IsDirty);
-        Assert.Equal(1, doc.ModifiedCount);
-
-        doc.ClearPendingMarkers();
+        Assert.False(entry.IsModified);
         Assert.Equal(0, doc.ModifiedCount);
     }
 
     [Fact]
-    public void ClearPendingMarkers_RefusesWhenContentActuallyDiffers()
+    public void AToggleThatStillDiffersStaysPending()
     {
         var doc = Fixture.Parse();
-        doc.Toggle(doc.Entries.First(e => e.PrimaryHostname == "ics.local"));
+        var entry = doc.Entries.First(e => e.PrimaryHostname == "ics.local");
 
-        Assert.Throws<InvalidOperationException>(() => doc.ClearPendingMarkers());
+        doc.Toggle(entry);
+
+        Assert.True(doc.IsDirty);
+        Assert.True(entry.IsModified);
+        Assert.Equal(1, doc.ModifiedCount);
+    }
+
+    /// <summary>Undoing one edit must not clear the ones the user still has outstanding.</summary>
+    [Fact]
+    public void UndoingOneToggleKeepsAnotherEntryPending()
+    {
+        var doc = Fixture.Parse();
+        var undone = doc.Entries.First(e => e.PrimaryHostname == "ics.local");
+        var kept = doc.Entries.First(e => !e.IsReadOnly && e != undone);
+
+        doc.Toggle(undone);
+        doc.Toggle(kept);
+        doc.Toggle(undone);
+
+        Assert.True(doc.IsDirty);
+        Assert.False(undone.IsModified);
+        Assert.True(kept.IsModified);
+        Assert.Equal(1, doc.ModifiedCount);
+    }
+
+    /// <summary>
+    /// Re-disabling an entry that arrived disabled with unusual spacing must restore its
+    /// exact original text, not a normalized "#" prefix — otherwise the undo would leave a
+    /// real difference behind while the line stopped reporting itself as pending.
+    /// </summary>
+    [Fact]
+    public void UndoingAToggleOnAnOddlyPrefixedLineRestoresItsOriginalText()
+    {
+        const string text = "#\t127.0.0.1 app.local\r\n";
+        var doc = HostsFileParser.Parse(text, FileFormat.Default);
+        var entry = doc.Entries.Single();
+
+        doc.Toggle(entry);
+        doc.Toggle(entry);
+
+        Assert.Equal(text, doc.Render());
+        Assert.False(entry.IsModified);
+    }
+
+    [Fact]
+    public void SaveCommitsPendingLinesAsTheNewBaseline()
+    {
+        var doc = Fixture.Parse();
+        var entry = doc.Entries.First(e => e.PrimaryHostname == "ics.local");
+
+        doc.Toggle(entry);
+        doc.Commit();
+
+        Assert.False(doc.IsDirty);
+        Assert.False(entry.IsModified);
+
+        // The committed state is the new baseline, so toggling back is now the pending change.
+        doc.Toggle(entry);
+        Assert.True(entry.IsModified);
+    }
+
+    /// <summary>
+    /// Replaced lines are new objects with nothing of their own to compare against, so an
+    /// import that reproduces the current file exactly would otherwise report every entry
+    /// as pending while Save stayed disabled — the same disagreement, a different route.
+    /// </summary>
+    [Fact]
+    public void ImportingAFileIdenticalToTheCurrentOneLeavesNothingPending()
+    {
+        const string text = "# a header\r\n127.0.0.1  a.local\t# spaced oddly\r\n#\t127.0.0.1 b.local\r\n";
+        var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+        var doc = HostsFileParser.Parse(text, FileFormat.Default);
+
+        doc.ReplaceUserEntries(HostsImportReader.Parse(bytes).Entries);
+
+        Assert.Equal(text, doc.Render());
+        Assert.False(doc.IsDirty);
+        Assert.Equal(0, doc.ModifiedCount);
+    }
+
+    [Fact]
+    public void ImportingDifferentEntriesStillReportsThemAsPending()
+    {
+        var doc = HostsFileParser.Parse("127.0.0.1 a.local\r\n", FileFormat.Default);
+        var import = HostsImportReader.Parse(
+            System.Text.Encoding.UTF8.GetBytes("127.0.0.1 b.local\r\n127.0.0.1 c.local\r\n"));
+
+        doc.ReplaceUserEntries(import.Entries);
+
+        Assert.True(doc.IsDirty);
+        Assert.Equal(2, doc.ModifiedCount);
     }
 
     // ---- backup manifests describe the bytes they contain ------------------

@@ -49,22 +49,26 @@ against Windows 11, so the installer refuses rather than putting the app somewhe
 never been exercised. Windows 7 and 8.1 can't run it at all —
 [.NET 8 dropped them](https://learn.microsoft.com/en-us/dotnet/core/install/windows#supported-versions).
 
-Grab the **`.msi`** matching your CPU from `dist` — this is the installer. It puts the
-app in Program Files, adds a Start Menu shortcut, and registers an uninstall entry:
+Every file is named `HostsManager-<version>-<arch>-<kind>`, so a download still says what
+it is after it leaves the release page. **Setup** installs; **Portable** just runs.
+
+Grab the **`-Setup.msi`** matching your CPU from `dist` — this is the installer. It puts
+the app in Program Files, adds a Start Menu shortcut, and registers an uninstall entry:
 
 | CPU | Installer |
 | --- | --- |
-| 64-bit Intel or AMD | `HostsManager-x64.msi` |
-| ARM (Surface, Snapdragon) | `HostsManager-arm64.msi` |
-| 32-bit Intel | `HostsManager-x86.msi` |
+| 64-bit Intel or AMD | `HostsManager-<version>-x64-Setup.msi` |
+| ARM (Surface, Snapdragon) | `HostsManager-<version>-arm64-Setup.msi` |
+| 32-bit Intel | `HostsManager-<version>-x86-Setup.msi` |
 
 Each is self-contained — no .NET runtime needed on the target machine.
 
-A matching `HostsManager-<arch>.exe` sits alongside each installer. That's the **portable**
-build — the same app, run directly with no install step. It's deliberately not an
-installer: running it does not touch Program Files, does not add a Start Menu entry, and
-there is no wizard to show, because nothing is being installed. If you double-click it
-expecting installer behaviour, that's why nothing seems to happen — use the `.msi` instead.
+A matching `HostsManager-<version>-<arch>-Portable.exe` sits alongside each installer.
+That's the **portable** build — the same app, run directly with no install step. It's
+deliberately not an installer: running it does not touch Program Files, does not add a
+Start Menu entry, and there is no wizard to show, because nothing is being installed. If
+you double-click it expecting installer behaviour, that's why nothing seems to happen —
+use the `-Setup.msi` instead.
 
 Not sure which CPU you need? `echo %PROCESSOR_ARCHITECTURE%` reports `AMD64`, `ARM64` or
 `x86`.

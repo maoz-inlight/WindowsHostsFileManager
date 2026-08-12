@@ -58,6 +58,14 @@ foreach ($arch in $Architectures) {
 
     Write-Host "`n=== $rid ===" -ForegroundColor Cyan
 
+    # Versioned names no longer overwrite the previous build, so an older version's
+    # artifacts for this architecture would otherwise pile up in dist and be easy to
+    # upload or hand out by mistake. The pattern is loose enough to also clear the
+    # pre-versioning `HostsManager-<arch>.msi`/`.exe` names, and matches only this
+    # architecture — no version string contains another arch's name.
+    Get-ChildItem $outputRoot -Filter "HostsManager-*$arch*" -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force
+
     Write-Host 'Publishing...'
     dotnet publish $project `
         --configuration $Configuration `
@@ -72,7 +80,11 @@ foreach ($arch in $Architectures) {
         --nologo --verbosity quiet
     if ($LASTEXITCODE -ne 0) { throw "publish failed for $rid" }
 
-    $msi = Join-Path $outputRoot "HostsManager-$arch.msi"
+    # Version and kind are in the file name so a downloaded artifact still says what it is
+    # once it's sitting in someone's Downloads folder, detached from the release page —
+    # "Setup" installs, "Portable" just runs. See "The 'broken installer' that wasn't" in
+    # docs/decisions.md for the confusion this is meant to prevent.
+    $msi = Join-Path $outputRoot "HostsManager-$Version-$arch-Setup.msi"
 
     Write-Host 'Building installer...'
     # -pdbtype none keeps dist to shippable files only. Version is passed explicitly
@@ -90,7 +102,7 @@ foreach ($arch in $Architectures) {
 
     # Ship the bare executable alongside the installer for anyone who would rather not install.
     Copy-Item (Join-Path $publishDir 'HostsManager.exe') `
-        (Join-Path $outputRoot "HostsManager-$arch.exe") -Force
+        (Join-Path $outputRoot "HostsManager-$Version-$arch-Portable.exe") -Force
 }
 
 Write-Host "`n=== dist ===" -ForegroundColor Cyan

@@ -244,9 +244,14 @@ public class WriterTests : IDisposable
     {
         var doc = _writer.Load();
 
-        // Bypass the guard the way only a bug could, and confirm the gate still catches it.
-        var managed = doc.Lines.First(l => l.IsReadOnly && l.IsEntry);
-        typeof(HostsLine).GetProperty(nameof(HostsLine.IsModified))!.SetValue(managed, true);
+        // Bypass the guard the way only a bug could — disable a managed line without going
+        // through the mutation that refuses it — and confirm the gate still catches it.
+        var managed = doc.Lines.First(l => l.IsReadOnly && l.Kind == LineKind.Entry);
+        typeof(HostsLine).GetProperty(nameof(HostsLine.Kind))!
+            .GetSetMethod(nonPublic: true)!
+            .Invoke(managed, new object[] { LineKind.DisabledEntry });
+
+        Assert.True(managed.IsModified);
 
         Assert.Throws<HostsVerificationException>(() => HostsFileVerifier.Verify(doc, doc.Render()));
     }

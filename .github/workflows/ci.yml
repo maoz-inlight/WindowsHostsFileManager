@@ -52,7 +52,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: installer-x64
+          # Globbed over the version: the file names carry the version from
+          # Directory.Build.props, which moves with every release.
           path: |
-            dist/HostsManager-x64.msi
-            dist/HostsManager-x64.exe
+            dist/HostsManager-*-x64-Setup.msi
+            dist/HostsManager-*-x64-Portable.exe
           retention-days: 14
