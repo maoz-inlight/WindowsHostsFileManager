@@ -15,11 +15,11 @@ internal static class UnelevatedProcessLauncher
     private const uint TokenAssignPrimary = 0x0001;
     private const uint TokenDuplicate = 0x0002;
     private const uint TokenQuery = 0x0008;
+    private const uint TokenAdjustDefault = 0x0080;
     private const uint MaximumAllowed = 0x02000000;
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const uint CreateSuspended = 0x00000004;
     private const uint CreateUnicodeEnvironment = 0x00000400;
-    private const uint DisableMaxPrivilege = 0x00000001;
     private const uint LuaToken = 0x00000004;
     private const int SecurityImpersonation = 2;
     private const int TokenPrimary = 1;
@@ -113,13 +113,13 @@ internal static class UnelevatedProcessLauncher
             // demands SeAssignPrimaryTokenPrivilege for that unless the token is a child or
             // sibling of our own. An elevated app holds a duplicate of the full administrator
             // token, so the shell's token is neither and the attempts fail with
-            // ERROR_PRIVILEGE_NOT_HELD. A restricted copy of our own token *is* a child of it,
-            // so it can always be assigned. Stripping Administrators and dropping to medium
-            // integrity is exactly how Windows builds the desktop user's own filtered token,
-            // and it is only equivalent while we are running as that same user.
+            // ERROR_PRIVILEGE_NOT_HELD. A UAC-limited copy of our own token *is* a child of it,
+            // so it can be assigned without that privilege. It is only equivalent to the
+            // desktop token while both belong to the same user, and its integrity label must be
+            // copied explicitly: token restriction and mandatory integrity are separate.
             if (processInfo.Process == IntPtr.Zero && RunsAsSameUserAs(shellToken))
             {
-                if (TryCreateUnprivilegedToken(out restrictedToken))
+                if (TryCreateUnprivilegedToken(shellToken, out restrictedToken, out var tokenError))
                 {
                     if (!CreateProcessAsUser(restrictedToken, executable, NewCommandLine(),
                             IntPtr.Zero, IntPtr.Zero, false, flags, environment, workingDirectory,
@@ -131,7 +131,8 @@ internal static class UnelevatedProcessLauncher
                 }
                 else
                 {
-                    failures.Add(DescribeLastError("Building a non-administrator copy of this app's token"));
+                    failures.Add("Building a standard-user copy of this app's token failed: "
+                        + DescribeError(tokenError) + ".");
                     restrictedToken = IntPtr.Zero;
                 }
             }
@@ -142,13 +143,21 @@ internal static class UnelevatedProcessLauncher
                     + Environment.NewLine + string.Join(Environment.NewLine,
                         failures.Select(failure => "  • " + failure)));
 
-            // Verify before any browser code runs. If Windows ever gives us an elevated
-            // child despite the requested token, terminate it while it is still suspended.
+            // Verify both UAC elevation and mandatory integrity before browser code runs.
+            // v1.0.10 checked only TokenElevation; a restricted token can report not elevated
+            // while still carrying the app's high-integrity label, which Chromium rejects.
             if (IsProcessElevated(processInfo.Process))
             {
                 TerminateProcess(processInfo.Process, 1);
                 throw new InvalidOperationException(
                     "The isolated browser would have run as administrator, so launch was cancelled.");
+            }
+
+            if (!ProcessHasSameIntegrityLevel(processInfo.Process, shellToken))
+            {
+                TerminateProcess(processInfo.Process, 1);
+                throw new InvalidOperationException(
+                    "The isolated browser did not receive the desktop user's integrity level, so launch was cancelled.");
             }
 
             if (ResumeThread(processInfo.Thread) == uint.MaxValue)
@@ -194,6 +203,38 @@ internal static class UnelevatedProcessLauncher
         return elevation.TokenIsElevated != 0;
     }
 
+    private static bool ProcessHasSameIntegrityLevel(IntPtr process, IntPtr expectedToken)
+    {
+        if (!OpenProcessToken(process, TokenQuery, out var processToken))
+            ThrowLastWin32("Could not inspect the browser integrity level");
+
+        try { return TokensHaveSameIntegrityLevel(processToken, expectedToken); }
+        finally { CloseHandle(processToken); }
+    }
+
+    private static bool TokensHaveSameIntegrityLevel(IntPtr firstToken, IntPtr secondToken)
+    {
+        IntPtr firstIntegrity = IntPtr.Zero;
+        IntPtr secondIntegrity = IntPtr.Zero;
+
+        try
+        {
+            firstIntegrity = ReadTokenInformation(firstToken,
+                TokenInformationClass.TokenIntegrityLevel, "Could not inspect a token integrity level");
+            secondIntegrity = ReadTokenInformation(secondToken,
+                TokenInformationClass.TokenIntegrityLevel, "Could not inspect a token integrity level");
+
+            // TOKEN_MANDATORY_LABEL begins with SID_AND_ATTRIBUTES, whose first member
+            // is the integrity SID pointer.
+            return EqualSid(Marshal.ReadIntPtr(firstIntegrity), Marshal.ReadIntPtr(secondIntegrity));
+        }
+        finally
+        {
+            if (secondIntegrity != IntPtr.Zero) Marshal.FreeHGlobal(secondIntegrity);
+            if (firstIntegrity != IntPtr.Zero) Marshal.FreeHGlobal(firstIntegrity);
+        }
+    }
+
     private static bool RunsAsSameUserAs(IntPtr otherToken)
     {
         IntPtr currentToken = IntPtr.Zero;
@@ -205,8 +246,10 @@ internal static class UnelevatedProcessLauncher
             if (!OpenProcessToken(Process.GetCurrentProcess().Handle, TokenQuery, out currentToken))
                 ThrowLastWin32("Could not read this app's user token");
 
-            currentUser = ReadTokenUser(currentToken);
-            otherUser = ReadTokenUser(otherToken);
+            currentUser = ReadTokenInformation(currentToken,
+                TokenInformationClass.TokenUser, "Could not inspect this app's user token");
+            otherUser = ReadTokenInformation(otherToken,
+                TokenInformationClass.TokenUser, "Could not inspect the desktop user token");
 
             // TOKEN_USER starts with SID_AND_ATTRIBUTES, whose first member is the SID
             // pointer. The backing buffers remain alive for the comparison.
@@ -220,43 +263,98 @@ internal static class UnelevatedProcessLauncher
         }
     }
 
-    private static IntPtr ReadTokenUser(IntPtr token)
+    private static IntPtr ReadTokenInformation(IntPtr token,
+        TokenInformationClass informationClass, string action)
     {
-        GetTokenInformationBuffer(token, TokenInformationClass.TokenUser,
+        GetTokenInformationBuffer(token, informationClass,
             IntPtr.Zero, 0, out var size);
-        if (size <= 0) ThrowLastWin32("Could not determine the user-token buffer size");
+        if (size <= 0) ThrowLastWin32(action);
 
         var buffer = Marshal.AllocHGlobal(size);
-        if (!GetTokenInformationBuffer(token, TokenInformationClass.TokenUser,
+        if (!GetTokenInformationBuffer(token, informationClass,
                 buffer, size, out _))
         {
             Marshal.FreeHGlobal(buffer);
-            ThrowLastWin32("Could not inspect a user token");
+            ThrowLastWin32(action);
         }
 
         return buffer;
     }
 
-    private static bool TryCreateUnprivilegedToken(out IntPtr restrictedToken)
+    private static bool TryCreateUnprivilegedToken(IntPtr desktopToken,
+        out IntPtr restrictedToken, out int error)
     {
         restrictedToken = IntPtr.Zero;
-
-        if (!OpenProcessToken(Process.GetCurrentProcess().Handle,
-                TokenAssignPrimary | TokenDuplicate | TokenQuery, out var currentToken))
-            return false;
+        error = 0;
+        IntPtr currentToken = IntPtr.Zero;
+        IntPtr integrity = IntPtr.Zero;
+        var success = false;
 
         try
         {
-            // LUA_TOKEN builds the same limited-user form Windows uses for UAC, while
-            // DISABLE_MAX_PRIVILEGE removes every remaining privilege except traversal.
-            // Because this is derived from our own primary token, CreateProcessAsUser
-            // does not require SeAssignPrimaryTokenPrivilege for the result.
-            return CreateRestrictedToken(currentToken, DisableMaxPrivilege | LuaToken,
-                0, IntPtr.Zero, 0, IntPtr.Zero, 0, IntPtr.Zero, out restrictedToken);
+            if (!OpenProcessToken(Process.GetCurrentProcess().Handle,
+                    TokenAssignPrimary | TokenDuplicate | TokenQuery | TokenAdjustDefault,
+                    out currentToken))
+            {
+                error = Marshal.GetLastWin32Error();
+                return false;
+            }
+
+            // LUA_TOKEN removes administrator capability while retaining the ordinary
+            // user privileges the Chromium broker needs. DISABLE_MAX_PRIVILEGE must not
+            // be used here: Chromium applies its own stronger restrictions to child
+            // processes after the browser broker has initialized.
+            if (!CreateRestrictedToken(currentToken, LuaToken,
+                    0, IntPtr.Zero, 0, IntPtr.Zero, 0, IntPtr.Zero, out restrictedToken))
+            {
+                error = Marshal.GetLastWin32Error();
+                return false;
+            }
+
+            GetTokenInformationBuffer(desktopToken, TokenInformationClass.TokenIntegrityLevel,
+                IntPtr.Zero, 0, out var integritySize);
+            if (integritySize <= 0)
+            {
+                error = Marshal.GetLastWin32Error();
+                return false;
+            }
+
+            integrity = Marshal.AllocHGlobal(integritySize);
+            if (!GetTokenInformationBuffer(desktopToken, TokenInformationClass.TokenIntegrityLevel,
+                    integrity, integritySize, out _))
+            {
+                error = Marshal.GetLastWin32Error();
+                return false;
+            }
+
+            if (!SetTokenInformation(restrictedToken, TokenInformationClass.TokenIntegrityLevel,
+                    integrity, integritySize))
+            {
+                error = Marshal.GetLastWin32Error();
+                return false;
+            }
+
+            if (IsTokenElevated(restrictedToken)
+                || !TokensHaveSameIntegrityLevel(restrictedToken, desktopToken))
+            {
+                // ERROR_INVALID_DATA: Windows produced a token that failed our security
+                // invariants even though each individual API call succeeded.
+                error = 13;
+                return false;
+            }
+
+            success = true;
+            return true;
         }
         finally
         {
-            CloseHandle(currentToken);
+            if (integrity != IntPtr.Zero) Marshal.FreeHGlobal(integrity);
+            if (currentToken != IntPtr.Zero) CloseHandle(currentToken);
+            if (!success && restrictedToken != IntPtr.Zero)
+            {
+                CloseHandle(restrictedToken);
+                restrictedToken = IntPtr.Zero;
+            }
         }
     }
 
@@ -331,7 +429,12 @@ internal static class UnelevatedProcessLauncher
     [StructLayout(LayoutKind.Sequential)]
     private struct TokenElevation { public int TokenIsElevated; }
 
-    private enum TokenInformationClass { TokenUser = 1, TokenElevation = 20 }
+    private enum TokenInformationClass
+    {
+        TokenUser = 1,
+        TokenElevation = 20,
+        TokenIntegrityLevel = 25,
+    }
 
     [DllImport("user32.dll")]
     private static extern IntPtr GetShellWindow();
@@ -353,6 +456,11 @@ internal static class UnelevatedProcessLauncher
     private static extern bool GetTokenInformationBuffer(IntPtr token,
         TokenInformationClass informationClass, IntPtr information,
         int informationLength, out int returnLength);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool SetTokenInformation(IntPtr token,
+        TokenInformationClass informationClass, IntPtr information,
+        int informationLength);
 
     [DllImport("advapi32.dll", SetLastError = true)]
     private static extern bool EqualSid(IntPtr sid1, IntPtr sid2);
