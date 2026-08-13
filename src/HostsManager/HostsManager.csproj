@@ -12,12 +12,8 @@
     <UseWPF>true</UseWPF>
     <!-- For the tray NotifyIcon, which WPF has no equivalent of. -->
     <UseWindowsForms>true</UseWindowsForms>
-    <!--
-      Shipping builds require elevation to write the real hosts file. Setting the
-      NoElevation property drops the manifest, so the app can be rehearsed unelevated
-      against a copy passed on the command line.
-    -->
-    <ApplicationManifest Condition="'$(NoElevation)' != 'true'">app.manifest</ApplicationManifest>
+    <!-- The UI runs as the desktop user; one short-lived helper elevates only for writes. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>HostsManager</AssemblyName>
     <RootNamespace>HostsManager</RootNamespace>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>

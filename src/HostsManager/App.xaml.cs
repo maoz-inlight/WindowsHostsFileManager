@@ -12,8 +12,21 @@ public partial class App : Application
         base.OnStartup(e);
 
         var options = CommandLineOptions.Parse(e.Args);
+
+        // The helper is intentionally handled before theme, windows, tray icons, or the
+        // single-instance lock. Its whole lifetime is one narrowly scoped write.
+        if (options.ElevatedWriteRequest is { } requestPath)
+        {
+            var exitCode = ElevatedHostsFileCommitter.RunHelper(requestPath);
+            Shutdown(exitCode);
+            return;
+        }
+
         var backups = new BackupManager(options.BackupsDirectory);
-        var writer = new HostsFileWriter(options.HostsPath, backups);
+        var needsElevation = ElevatedHostsFileCommitter.IsDefaultHostsPath(options.HostsPath)
+                             && !ProcessPrivileges.IsAdministrator;
+        var writer = new HostsFileWriter(options.HostsPath, backups, committer:
+            needsElevation ? new ElevatedHostsFileCommitter() : null);
 
         // Headless recovery runs regardless of an existing instance: it is the path you
         // reach for when something is already wrong, so it must not be refusable.
@@ -26,7 +39,7 @@ public partial class App : Application
 
         // Two instances would each hold their own view of the file and their own drift
         // hash, so the second one hands off to the first and leaves.
-        if (!SingleInstance.TryAcquire(out var single))
+        if (!SingleInstance.TryAcquire(out var single, options.PrivateInstance))
         {
             Shutdown();
             return;
@@ -115,6 +128,8 @@ public sealed record CommandLineOptions
     public string? BackupsDirectory { get; init; }
     public bool RestoreLatest { get; init; }
     public bool RestoreOriginal { get; init; }
+    public bool PrivateInstance { get; init; }
+    public string? ElevatedWriteRequest { get; init; }
 
     /// <summary>Pins the theme instead of following Windows. Null means follow the system.</summary>
     public AppTheme? ForcedTheme { get; init; }
@@ -125,6 +140,8 @@ public sealed record CommandLineOptions
         string? backupsDirectory = null;
         var restoreLatest = false;
         var restoreOriginal = false;
+        var privateInstance = false;
+        string? elevatedWriteRequest = null;
         AppTheme? forcedTheme = null;
 
         for (var i = 0; i < args.Length; i++)
@@ -143,6 +160,12 @@ public sealed record CommandLineOptions
                 case "--restore-original":
                     restoreOriginal = true;
                     break;
+                case "--private-instance":
+                    privateInstance = true;
+                    break;
+                case ElevatedHostsFileCommitter.HelperArgument when i + 1 < args.Length:
+                    elevatedWriteRequest = args[++i];
+                    break;
                 case "--theme" when i + 1 < args.Length:
                     forcedTheme = args[++i].ToLowerInvariant() switch
                     {
@@ -160,6 +183,8 @@ public sealed record CommandLineOptions
             BackupsDirectory = backupsDirectory,
             RestoreLatest = restoreLatest,
             RestoreOriginal = restoreOriginal,
+            PrivateInstance = privateInstance,
+            ElevatedWriteRequest = elevatedWriteRequest,
             ForcedTheme = forcedTheme,
         };
     }

@@ -76,6 +76,11 @@ write pipeline refuses a save that modifies one.
 `HostsFileWriter.Save()` runs a fixed sequence of gates. Any failure aborts before the
 real file is touched:
 
+For the real Windows hosts path, the ordinary UI prepares the verified bytes and sends
+them to a short-lived elevated helper. The helper is restricted to that one target and
+repeats the content verification and drift check before continuing through the same
+pipeline below. Writers pointed at a test copy use the pipeline directly without UAC.
+
 1. **Drift check** — compare a SHA-256 of the on-disk file against the hash captured at
    load. If it changed (Docker or Tailscale rewrote it), refuse and prompt to reload.
 2. **Render** to a string from the line model; unmodified lines are emitted from their

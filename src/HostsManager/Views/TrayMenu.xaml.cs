@@ -18,13 +18,27 @@ public sealed record TraySeparator;
 /// </summary>
 public partial class TrayMenu : Window
 {
+    private bool _isClosing;
+
     public TrayMenu(IReadOnlyList<object> rows)
     {
         InitializeComponent();
         Rows.ItemsSource = rows;
 
-        Deactivated += (_, _) => Close();
-        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
+        Closing += (_, _) => _isClosing = true;
+        Deactivated += (_, _) => Dismiss();
+        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Dismiss(); };
+    }
+
+    public void Dismiss()
+    {
+        if (_isClosing) return;
+
+        // Mark the window before entering WPF's synchronous close sequence. Closing
+        // deactivates the popup and can therefore re-enter this method before Close()
+        // returns; the guard prevents the second Close() that used to crash the app.
+        _isClosing = true;
+        Close();
     }
 
     /// <summary>
@@ -92,18 +106,18 @@ public partial class TrayMenu : Window
     private void OnHeaderClick(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is TrayHeaderRow row) row.OnClick();
-        Close();
+        Dismiss();
     }
 
     private void OnActionClick(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is TrayActionRow row) row.OnClick();
-        Close();
+        Dismiss();
     }
 
     private void OnToggleClick(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is TrayToggleRow row) row.OnToggle();
-        Close();
+        Dismiss();
     }
 }

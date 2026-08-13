@@ -38,7 +38,7 @@
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="Hosts manager" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <Border Style="{StaticResource Badge}" Background="{DynamicResource WarningBg}" Margin="10,0,0,0">
-                        <TextBlock Text="Administrator" FontSize="11" Foreground="{DynamicResource Warning}" />
+                        <TextBlock x:Name="PrivilegeText" Text="Administrator" FontSize="11" Foreground="{DynamicResource Warning}" />
                     </Border>
                 </StackPanel>
 

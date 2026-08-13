@@ -83,11 +83,16 @@ Uninstalling removes the app but deliberately leaves your backups in place.
 ## Administrator rights
 
 The hosts file lives in `System32` and is owned by `BUILTIN\Administrators`, so writing to
-it requires elevation. The app's manifest declares `requireAdministrator`, which means
-**one UAC prompt when it launches** and none afterwards — rather than a prompt on every
-save.
+it requires elevation. Hosts Manager itself runs as the ordinary desktop user, so browsing
+entries and opening an isolated Edge or Chrome window does not need UAC. Saving, restoring,
+or toggling from the tray starts a short-lived elevated copy that performs only that
+hosts-file write and exits.
 
-Two deliberate consequences:
+The elevated helper accepts only the real Windows hosts path and Hosts Manager's own backup
+directory. It rechecks the proposed bytes, the drift hash, the backup, the atomic replace,
+and the final on-disk hash itself instead of trusting the ordinary UI process.
+
+Two other deliberate consequences:
 
 - Saves use `File.Replace`, which **preserves the hosts file's original ACLs**. A plain
   overwrite from an elevated process can leave the file with different permissions than
@@ -99,11 +104,11 @@ Two deliberate consequences:
   restorable *without* elevation, which is exactly the situation you're in when something
   has gone wrong.
 
-To rehearse changes without elevation, build without the manifest and point the app at a
-copy:
+To rehearse changes without elevation, point the app at a copy. Custom paths are written
+directly by the ordinary process and never invoke the elevated helper:
 
 ```bash
-dotnet build src/HostsManager/HostsManager.csproj -p:NoElevation=true -o build
+dotnet build src/HostsManager/HostsManager.csproj -o build
 ```
 
 ```bash
@@ -157,9 +162,9 @@ staging servers while the rest of the machine continues using normal DNS.
 
 The preview never writes the hosts file and never disables certificate validation. The URL
 hostname is preserved, so the target server still needs to present the correct HTTPS
-certificate. Because Hosts manager itself runs elevated, the launch is suspended and its
-security token checked before any browser code runs; the launch is cancelled unless the
-browser has the desktop user's non-administrator token.
+certificate. Hosts Manager and the browser both run with the desktop user's normal token;
+if Hosts Manager was manually started as administrator, browser preview is refused with an
+instruction to restart normally rather than attempting to manufacture a downgraded token.
 
 The restore flags bypass the single-instance guard on purpose: they're what you reach for
 when something is already wrong, so they must never be refused.

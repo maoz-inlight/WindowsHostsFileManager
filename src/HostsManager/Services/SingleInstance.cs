@@ -12,8 +12,6 @@ namespace HostsManager.Services;
 /// </summary>
 public sealed class SingleInstance : IDisposable
 {
-    // Session-scoped: the app always runs elevated on the interactive desktop, so there
-    // is no cross-session case to cover.
     private const string MutexName = @"Local\HostsManager.Instance";
     private const string ActivateEventName = @"Local\HostsManager.Activate";
 
@@ -35,12 +33,16 @@ public sealed class SingleInstance : IDisposable
     /// Returns true and the owning handle if this is the first instance. Returns false
     /// if another instance is already running, having first asked it to surface.
     /// </summary>
-    public static bool TryAcquire(out SingleInstance? instance)
+    public static bool TryAcquire(out SingleInstance? instance, bool privateInstance = false)
     {
         instance = null;
 
-        var mutex = new Mutex(initiallyOwned: true, MutexName, out var isFirst);
-        var signal = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
+        // A private rehearsal edits a workspace fixture and deliberately runs beside the
+        // installed app. Its separate names prevent either copy from activating or
+        // suppressing the other while preserving one-instance protection within each mode.
+        var suffix = privateInstance ? ".Private" : "";
+        var mutex = new Mutex(initiallyOwned: true, MutexName + suffix, out var isFirst);
+        var signal = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName + suffix);
 
         if (!isFirst)
         {

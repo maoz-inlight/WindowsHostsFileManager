@@ -82,7 +82,7 @@ public sealed class TrayIcon : IDisposable
     {
         // A stray second right-click while one is already open would otherwise stack a
         // new popup on top of it instead of replacing it.
-        _menu?.Close();
+        _menu?.Dismiss();
 
         _menu = new TrayMenu(BuildRows());
 
@@ -168,7 +168,7 @@ public sealed class TrayIcon : IDisposable
 
     public void Dispose()
     {
-        _menu?.Close();
+        _menu?.Dismiss();
         _icon.Visible = false;
         _icon.ContextMenuStrip?.Dispose();
         _icon.Dispose();

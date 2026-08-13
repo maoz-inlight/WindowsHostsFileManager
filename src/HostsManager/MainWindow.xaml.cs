@@ -19,6 +19,10 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        PrivilegeText.Text = ProcessPrivileges.IsAdministrator
+            ? "Administrator · restart normally"
+            : "Elevates on save";
+
         _vm = vm;
         DataContext = vm;
 

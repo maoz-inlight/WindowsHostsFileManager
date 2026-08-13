@@ -3,17 +3,24 @@
 A log of the non-obvious choices made after the initial build, and why. Ordered roughly
 by when they came up.
 
-## Elevation: manifest-level, not per-action
+## Elevation: per-write helper, not the desktop UI
 
-`app.manifest` declares `requestedExecutionLevel="requireAdministrator"`, so the app
-elevates once at launch rather than prompting on every save. The trade-off is a UAC
-prompt the user can't avoid even to just browse the list — accepted because the app's
-only real function (writing `System32\drivers\etc\hosts`) always needs it, so deferring
-elevation would only mean hitting the same prompt on the first save anyway.
+`app.manifest` declares `requestedExecutionLevel="asInvoker"`. The long-lived WPF process,
+tray icon, and isolated browser therefore share the desktop user's ordinary token. Saving
+or restoring the real `System32\drivers\etc\hosts` file launches the same executable with
+`runas` and a one-use request; that elevated process performs one write and exits.
 
-A build-time `NoElevation` MSBuild property strips the manifest, producing an unelevated
-build for rehearsal against a copy via `--hosts-path`. This is a dev-only escape hatch,
-not shipped in `dist`.
+The first implementation elevated the whole app once at launch. That avoided repeated UAC
+prompts, but it made Chromium launch through a synthetic downgraded token. Edge and Chrome
+both rejected that token in the field with `0x80000003` breakpoint crashes. Running the UI
+normally fixes the root cause and also reduces the amount of code that holds administrator
+rights.
+
+The helper is not a general elevated file copier: it accepts only the canonical Windows
+hosts path and the app's default backup directory. It independently decodes, parses, and
+verifies the handed-off bytes, repeats the drift check using the UI's loaded SHA-256, takes
+the backup, atomically replaces the file, reads it back, and rolls back on failure. A custom
+`--hosts-path` remains entirely in-process and does not ask for elevation.
 
 ## Logo: a drawn glyph, not a font character
 

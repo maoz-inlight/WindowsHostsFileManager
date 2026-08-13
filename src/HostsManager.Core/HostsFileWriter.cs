@@ -14,6 +14,24 @@ public sealed class HostsDriftException : Exception
 public sealed record SaveResult(bool Success, string Message, string? BackupPath = null, bool RolledBack = false);
 
 /// <summary>
+/// A fully verified write that can be handed to a narrowly privileged process. The
+/// expected hash keeps the drift check anchored to what the UI actually loaded.
+/// </summary>
+public sealed record PreparedHostsWrite(
+    string HostsPath,
+    string BackupsDirectory,
+    byte[] Bytes,
+    string ExpectedSha256,
+    string BackupReason,
+    bool RefuseOnDrift,
+    string? FailureAdvice = null);
+
+public interface IHostsWriteCommitter
+{
+    SaveResult Commit(PreparedHostsWrite request);
+}
+
+/// <summary>
 /// Loads and saves the hosts file. Every save runs the same gated pipeline:
 /// drift check, render, verify, backup, atomic replace, read back. Any failure aborts
 /// before the file changes, or rolls back if it changed already.
@@ -21,13 +39,16 @@ public sealed record SaveResult(bool Success, string Message, string? BackupPath
 public sealed class HostsFileWriter
 {
     private readonly IReadOnlyList<ManagedSectionMarker> _markers;
+    private readonly IHostsWriteCommitter? _committer;
 
     public HostsFileWriter(string? hostsPath = null, BackupManager? backups = null,
-        IReadOnlyList<ManagedSectionMarker>? markers = null)
+        IReadOnlyList<ManagedSectionMarker>? markers = null,
+        IHostsWriteCommitter? committer = null)
     {
         HostsPath = hostsPath ?? DefaultHostsPath;
         Backups = backups ?? new BackupManager();
         _markers = markers ?? ManagedSections.Known;
+        _committer = committer;
     }
 
     public static string DefaultHostsPath => Path.Combine(
@@ -133,12 +154,58 @@ public sealed class HostsFileWriter
     private SaveResult Commit(byte[] newBytes, string backupReason, bool refuseOnDrift,
         string? failureAdvice = null)
     {
+        var request = new PreparedHostsWrite(
+            HostsPath,
+            Backups.Directory,
+            newBytes,
+            LoadedSha256,
+            backupReason,
+            refuseOnDrift,
+            failureAdvice);
+
+        var result = _committer is null
+            ? CommitPrepared(request)
+            : _committer.Commit(request);
+
+        // The elevated helper also performs this readback before reporting success. The
+        // ordinary UI repeats it after UAC returns so it never marks pending edits as
+        // committed based only on another process's exit code.
+        var writtenSha = HostsDocument.Sha256(File.ReadAllBytes(HostsPath));
+        if (writtenSha != HostsDocument.Sha256(newBytes))
+            throw new HostsWriteException(
+                "The hosts file changed again immediately after it was written. Reload it before making another change.");
+
+        LoadedSha256 = writtenSha;
+        return result;
+    }
+
+    /// <summary>
+    /// Executes a prepared write through the same safety pipeline. The elevated helper
+    /// calls this entry point after restricting the request to the real Windows hosts
+    /// file; custom-path and test writers call it in-process.
+    /// </summary>
+    public SaveResult CommitPrepared(PreparedHostsWrite request)
+    {
+        if (!PathsEqual(request.HostsPath, HostsPath)
+            || !PathsEqual(request.BackupsDirectory, Backups.Directory))
+            throw new HostsWriteException("The prepared write does not match this writer's paths.");
+
+        // Treat the handoff file as untrusted input. Decode, parse and verify it again in
+        // the process that actually has permission to touch System32.
+        var (text, format) = FileFormat.Decode(request.Bytes);
+        var candidate = HostsFileParser.Parse(text, format, _markers);
+        var rendered = candidate.Render();
+        HostsFileVerifier.Verify(candidate, rendered);
+        if (!format.Encode(rendered).SequenceEqual(request.Bytes))
+            throw new HostsWriteException("The prepared hosts content does not round-trip byte for byte.");
+
         if (!File.Exists(HostsPath))
             throw new HostsWriteException($"Hosts file not found at {HostsPath}.");
 
         var currentBytes = File.ReadAllBytes(HostsPath);
 
-        if (refuseOnDrift && HostsDocument.Sha256(currentBytes) != LoadedSha256)
+        if (request.RefuseOnDrift
+            && HostsDocument.Sha256(currentBytes) != request.ExpectedSha256)
             throw new HostsDriftException(
                 "The hosts file changed on disk since it was loaded. Reload before saving so those changes aren't lost.");
 
@@ -146,7 +213,7 @@ public sealed class HostsFileWriter
         BackupEntry backup;
         try
         {
-            backup = Backups.Create(currentBytes, backupReason);
+            backup = Backups.Create(currentBytes, request.BackupReason);
         }
         catch (Exception ex)
         {
@@ -156,21 +223,25 @@ public sealed class HostsFileWriter
 
         try
         {
-            ReplaceFile(newBytes);
+            ReplaceFile(request.Bytes);
         }
         catch (Exception ex)
         {
-            throw RolledBack("Writing the hosts file failed.", currentBytes, backup, failureAdvice, ex);
+            throw RolledBack("Writing the hosts file failed.", currentBytes, backup, request.FailureAdvice, ex);
         }
 
         var writtenSha = HostsDocument.Sha256(File.ReadAllBytes(HostsPath));
-        if (writtenSha != HostsDocument.Sha256(newBytes))
+        if (writtenSha != HostsDocument.Sha256(request.Bytes))
             throw RolledBack("The hosts file on disk does not match what was written.",
-                currentBytes, backup, failureAdvice);
+                currentBytes, backup, request.FailureAdvice);
 
         LoadedSha256 = writtenSha;
         return new SaveResult(true, "Done.", backup.FilePath);
     }
+
+    private static bool PathsEqual(string first, string second) =>
+        string.Equals(Path.GetFullPath(first), Path.GetFullPath(second),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     /// <summary>
     /// Attempts a rollback and builds the exception describing what actually happened.

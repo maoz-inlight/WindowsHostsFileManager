@@ -408,6 +408,75 @@ public class WriterTests : IDisposable
         Assert.True(_backups.Verify(rebuilt));
     }
 
+    // ---- split-elevation handoff -----------------------------------------
+
+    [Fact]
+    public void Save_HandsVerifiedBytesAndLoadedHashToTheConfiguredCommitter()
+    {
+        var before = OnDisk;
+        var committer = new RecordingCommitter();
+        var writer = new HostsFileWriter(_hostsPath, _backups, committer: committer);
+        var doc = writer.Load();
+        doc.AddEntry("127.0.0.1", new[] { "elevated-handoff.local" });
+
+        var result = writer.Save("Elevated test save");
+
+        Assert.True(result.Success);
+        Assert.NotNull(committer.Request);
+        Assert.Equal(_hostsPath, committer.Request.HostsPath);
+        Assert.Equal(_backups.Directory, committer.Request.BackupsDirectory);
+        Assert.Equal(HostsDocument.Sha256(before), committer.Request.ExpectedSha256);
+        Assert.Equal("Elevated test save", committer.Request.BackupReason);
+        Assert.True(committer.Request.RefuseOnDrift);
+        Assert.Contains("elevated-handoff.local", File.ReadAllText(_hostsPath));
+        Assert.False(doc.IsDirty);
+    }
+
+    [Fact]
+    public void CommitPrepared_RechecksDriftAgainstTheHashFromTheUiProcess()
+    {
+        var doc = _writer.Load();
+        doc.AddEntry("127.0.0.1", new[] { "intended.local" });
+        var intended = doc.Format.Encode(doc.Render());
+        var request = new PreparedHostsWrite(
+            _hostsPath, _backups.Directory, intended, _writer.LoadedSha256,
+            "Prepared save", RefuseOnDrift: true);
+
+        const string external = "127.0.0.1 external-change.local\r\n";
+        File.WriteAllText(_hostsPath, external);
+
+        var helperWriter = new HostsFileWriter(_hostsPath, _backups);
+        Assert.Throws<HostsDriftException>(() => helperWriter.CommitPrepared(request));
+        Assert.Equal(external, File.ReadAllText(_hostsPath));
+    }
+
+    [Fact]
+    public void CommitPrepared_RevalidatesHandoffBytesBeforeWriting()
+    {
+        _writer.Load();
+        var before = OnDisk;
+        var tampered = System.Text.Encoding.UTF8.GetBytes("127.0.0.1 bad\0host.local\r\n");
+        var request = new PreparedHostsWrite(
+            _hostsPath, _backups.Directory, tampered, _writer.LoadedSha256,
+            "Tampered handoff", RefuseOnDrift: true);
+
+        var helperWriter = new HostsFileWriter(_hostsPath, _backups);
+        Assert.Throws<HostsVerificationException>(() => helperWriter.CommitPrepared(request));
+        Assert.Equal(before, OnDisk);
+    }
+
+    private sealed class RecordingCommitter : IHostsWriteCommitter
+    {
+        public PreparedHostsWrite? Request { get; private set; }
+
+        public SaveResult Commit(PreparedHostsWrite request)
+        {
+            Request = request;
+            File.WriteAllBytes(request.HostsPath, request.Bytes);
+            return new SaveResult(true, "Saved by test committer.");
+        }
+    }
+
     private static string ExtractBlock(string text, string start, string end)
     {
         var from = text.IndexOf(start, StringComparison.Ordinal);
