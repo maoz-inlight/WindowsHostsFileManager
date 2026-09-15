@@ -168,7 +168,8 @@ public sealed class BrowserPreviewService : IDisposable
     }
 
     public BrowserPreviewSession Launch(ChromiumBrowser browser,
-        IReadOnlyList<BrowserOverride> overrides, IReadOnlyList<Uri> startUris)
+        IReadOnlyList<BrowserOverride> overrides, IReadOnlyList<Uri> startUris,
+        string? additionalFlags = null)
     {
         if (_active is { IsEnded: false })
             throw new InvalidOperationException(
@@ -181,12 +182,17 @@ public sealed class BrowserPreviewService : IDisposable
             throw new ArgumentException(
                 "Every preview URL must start with http:// or https://.", nameof(startUris));
 
+        var flags = BrowserPreviewFlags.Parse(additionalFlags);
+
         _active?.Dispose();
         _active = null;
 
         var rules = BrowserOverrideRules.Build(overrides);
+        // Separate flag configurations so a lingering Chromium process cannot reuse
+        // an existing profile and silently ignore newly selected startup switches.
+        var profileIdentity = flags.Count == 0 ? rules : rules + "\n" + string.Join("\n", flags);
         var profileKey = Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(rules)))[..12].ToLowerInvariant();
+            SHA256.HashData(Encoding.UTF8.GetBytes(profileIdentity)))[..12].ToLowerInvariant();
         var profile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "HostsManager", "browser-preview", browser.Kind.ToString().ToLowerInvariant(), profileKey);
@@ -201,6 +207,7 @@ public sealed class BrowserPreviewService : IDisposable
             "--disable-background-mode",
             "--new-window",
         };
+        arguments.AddRange(flags);
         arguments.AddRange(startUris.Select(uri => uri.AbsoluteUri));
 
         var process = UnelevatedProcessLauncher.Start(browser.ExecutablePath, arguments);

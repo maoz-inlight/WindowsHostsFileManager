@@ -14,6 +14,7 @@ public partial class MainWindow : Window
     private readonly MainViewModel _vm;
     private readonly BrowserPreviewService _browserPreview = new();
     private BrowserPreviewSession? _browserSession;
+    private string _browserFlags = "";
 
     public MainWindow(MainViewModel vm)
     {
@@ -55,7 +56,8 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var dialog = new BrowserPreviewDialog(entries.Select(entry => entry.Line).ToArray(), browsers)
+            var dialog = new BrowserPreviewDialog(
+                entries.Select(entry => entry.Line).ToArray(), browsers, _browserFlags)
             {
                 Owner = this,
             };
@@ -63,7 +65,8 @@ public partial class MainWindow : Window
             if (dialog.ShowDialog() != true) return;
 
             var session = _browserPreview.Launch(
-                dialog.SelectedBrowser, dialog.Overrides, dialog.SelectedStartUris);
+                dialog.SelectedBrowser, dialog.Overrides, dialog.SelectedStartUris, dialog.AdditionalFlags);
+            _browserFlags = dialog.AdditionalFlags;
             _browserSession = session;
             _vm.SetBrowserPreview(session.Description);
 

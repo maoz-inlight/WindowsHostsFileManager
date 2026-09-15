@@ -160,9 +160,23 @@ selected entries. Conflicting mappings for the same hostname are refused rather 
 silently choosing one. This is useful for opening production hostnames against local or
 staging servers while the rest of the machine continues using normal DNS.
 
-The preview never writes the hosts file and never disables certificate validation. The URL
-hostname is preserved, so the target server still needs to present the correct HTTPS
-certificate. Hosts Manager and the browser both run with the desktop user's normal token;
+The preview dialog includes checkboxes for **Ignore certificate errors**, **Disable web
+security (CORS)**, **Allow insecure content**, **Open DevTools**, **Private browsing**
+(Chrome Incognito / Edge InPrivate), and **Disable extensions**. All start unchecked.
+The first three reduce security and are intended for testing trusted sites in the isolated
+browser. Hover over an option for a description.
+
+Use **Additional flags** in the preview dialog to pass extra Chromium startup switches to
+Edge or Chrome. Enter one flag per line, such as `--disable-extensions` or
+`--auto-open-devtools-for-tabs`. Use `--name=value` for values; spaces are preserved and
+surrounding quotes are unnecessary. Duplicate flags and switches managed by Hosts Manager
+(including the profile directory and hostname resolver rules) are rejected. Flags from the
+last successful launch are remembered until Hosts Manager closes. Different flag configurations
+use separate isolated profiles so an existing browser process cannot ignore changed flags.
+
+The preview never writes the hosts file. Certificate validation stays enabled by default;
+custom flags can change browser behavior. The URL hostname is preserved, so the target server
+normally needs to present the correct HTTPS certificate. Hosts Manager and the browser both run with the desktop user's normal token;
 if Hosts Manager was manually started as administrator, browser preview is refused with an
 instruction to restart normally rather than attempting to manufacture a downgraded token.
 

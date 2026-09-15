@@ -5,6 +5,17 @@ using HostsManager.Services;
 
 namespace HostsManager.Views;
 
+public sealed class BrowserFlagOption(string label, string description, string flag, string? edgeFlag = null)
+{
+    public string Label { get; } = label;
+    public string Description { get; } = description;
+    public string Flag { get; } = flag;
+    public string? EdgeFlag { get; } = edgeFlag;
+    public bool IsSelected { get; set; }
+    public string ForBrowser(ChromiumBrowserKind kind) =>
+        kind == ChromiumBrowserKind.Edge ? EdgeFlag ?? Flag : Flag;
+}
+
 public sealed class BrowserStartPageOption
 {
     public BrowserStartPageOption(string urlText)
@@ -20,9 +31,25 @@ public partial class BrowserPreviewDialog : Window
 {
     private readonly IReadOnlyList<BrowserOverride> _overrides;
     private readonly IReadOnlyList<BrowserStartPageOption> _startPages;
+    private bool _initializing = true;
+    private readonly BrowserFlagOption[] _flagOptions =
+    {
+        new("Ignore certificate errors", "Open HTTPS sites with invalid or self-signed certificates.",
+            "--ignore-certificate-errors"),
+        new("Disable web security (CORS)", "Allow cross-origin requests normally blocked by the browser.",
+            "--disable-web-security"),
+        new("Allow insecure content", "Allow HTTP content to run inside HTTPS pages.",
+            "--allow-running-insecure-content"),
+        new("Open DevTools", "Open developer tools automatically for each tab.",
+            "--auto-open-devtools-for-tabs"),
+        new("Private browsing", "Use Incognito in Chrome or InPrivate in Edge.",
+            "--incognito", "--inprivate"),
+        new("Disable extensions", "Start the browser with extensions disabled.",
+            "--disable-extensions"),
+    };
 
     public BrowserPreviewDialog(IReadOnlyList<HostsLine> lines,
-        IReadOnlyList<ChromiumBrowser> browsers)
+        IReadOnlyList<ChromiumBrowser> browsers, string additionalFlags = "")
     {
         InitializeComponent();
 
@@ -41,9 +68,19 @@ public partial class BrowserPreviewDialog : Window
         BrowserBox.ItemsSource = browsers;
         BrowserBox.SelectedIndex = 0;
         StartPagesList.ItemsSource = _startPages;
+        var savedFlags = BrowserPreviewFlags.Parse(additionalFlags).ToList();
+        foreach (var option in _flagOptions)
+        {
+            option.IsSelected = savedFlags.Remove(option.Flag);
+            if (option.EdgeFlag is { } edgeFlag)
+                option.IsSelected |= savedFlags.Remove(edgeFlag);
+        }
+        FlagOptionsList.ItemsSource = _flagOptions;
+        FlagsBox.Text = string.Join(Environment.NewLine, savedFlags);
         MappingsText.Text = string.Join(Environment.NewLine,
             _overrides.Select(o => $"{o.Hostname}  →  {o.Target}"));
 
+        _initializing = false;
         Validate();
     }
 
@@ -51,6 +88,11 @@ public partial class BrowserPreviewDialog : Window
         (ChromiumBrowser)BrowserBox.SelectedItem;
 
     public IReadOnlyList<BrowserOverride> Overrides => _overrides;
+
+    public string AdditionalFlags => string.Join(Environment.NewLine,
+        BrowserPreviewFlags.Combine(FlagsBox.Text, _flagOptions
+            .Where(option => option.IsSelected)
+            .Select(option => option.ForBrowser(SelectedBrowser.Kind))));
 
     public IReadOnlyList<Uri> SelectedStartUris => _startPages
         .Where(page => page.IsSelected)
@@ -63,7 +105,7 @@ public partial class BrowserPreviewDialog : Window
 
     private void Validate()
     {
-        if (OpenButton is null || ErrorText is null || BrowserBox is null || _startPages is null) return;
+        if (_initializing || OpenButton is null || ErrorText is null || BrowserBox is null || _startPages is null) return;
 
         string? error = null;
         if (BrowserBox.SelectedItem is null)
@@ -74,6 +116,12 @@ public partial class BrowserPreviewDialog : Window
                      !Uri.TryCreate(page.UrlText.Trim(), UriKind.Absolute, out var uri)
                      || uri.Scheme is not ("http" or "https")))
             error = "Every selected tab needs a complete http:// or https:// URL.";
+
+        if (error is null)
+        {
+            try { BrowserPreviewFlags.Parse(AdditionalFlags); }
+            catch (ArgumentException ex) { error = ex.Message; }
+        }
 
         ErrorText.Text = error ?? "";
         OpenButton.IsEnabled = error is null;
