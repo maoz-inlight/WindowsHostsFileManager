@@ -217,6 +217,36 @@ public sealed class P1ReliabilityTests : IDisposable
     }
 
     [Fact]
+    public void PermissionComparisonIgnoresBookkeepingButChecksAccessAndProtection()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var original = new FileSecurity();
+        original.SetSecurityDescriptorSddlForm("D:(A;;FA;;;SY)");
+        var inherited = new FileSecurity();
+        inherited.SetSecurityDescriptorSddlForm("D:AI(A;;FA;;;SY)");
+        Assert.True(HostsFileOperations.AccessRulesMatch(original, inherited));
+        inherited.SetSecurityDescriptorSddlForm("D:P(A;;FA;;;SY)");
+        Assert.False(HostsFileOperations.AccessRulesMatch(original, inherited));
+        inherited.SetSecurityDescriptorSddlForm("D:(A;;FR;;;SY)");
+        Assert.False(HostsFileOperations.AccessRulesMatch(original, inherited));
+    }
+
+    [Fact]
+    public void AppliedPermissionsRetainAllAccessRules()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var operations = new HostsFileOperations();
+        var captured = operations.CapturePermissions(_hosts)!;
+        var temporary = Path.Combine(_directory, "permissions-test");
+        File.WriteAllText(temporary, "test");
+        operations.ApplyPermissions(temporary, captured);
+        var actual = operations.CapturePermissions(temporary)!;
+        Assert.True(operations.PermissionsMatch(temporary, captured),
+            $"Expected: {captured.GetSecurityDescriptorSddlForm(AccessControlSections.Access)}; " +
+            $"Actual: {actual.GetSecurityDescriptorSddlForm(AccessControlSections.Access)}");
+    }
+
+    [Fact]
     public void FallbackPreservesOriginalPermissions()
     {
         var writer = Writer();

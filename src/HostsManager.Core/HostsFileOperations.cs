@@ -29,8 +29,27 @@ internal class HostsFileOperations
     public virtual bool PermissionsMatch(string path, FileSecurity? permissions)
     {
         if (!OperatingSystem.IsWindows()) return true;
-        return permissions is not null && new FileInfo(path).GetAccessControl(AccessControlSections.Access)
-            .GetSecurityDescriptorSddlForm(AccessControlSections.Access)
-            == permissions.GetSecurityDescriptorSddlForm(AccessControlSections.Access);
+        if (permissions is null) return false;
+        var actual = new FileInfo(path).GetAccessControl(AccessControlSections.Access);
+        return AccessRulesMatch(actual, permissions);
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    internal static bool AccessRulesMatch(FileSecurity actual, FileSecurity expected)
+    {
+        // Windows may update inheritance bookkeeping when applying a DACL. Compare
+        // every ACE and its order, plus inheritance protection, rather than the AI/AR
+        // descriptor flags which do not themselves grant or deny access.
+        var left = new RawSecurityDescriptor(actual.GetSecurityDescriptorBinaryForm(), 0);
+        var right = new RawSecurityDescriptor(expected.GetSecurityDescriptorBinaryForm(), 0);
+        const ControlFlags relevant = ControlFlags.DiscretionaryAclPresent | ControlFlags.DiscretionaryAclProtected;
+        if ((left.ControlFlags & relevant) != (right.ControlFlags & relevant)) return false;
+        if (left.DiscretionaryAcl is null || right.DiscretionaryAcl is null)
+            return left.DiscretionaryAcl is null && right.DiscretionaryAcl is null;
+        var leftBytes = new byte[left.DiscretionaryAcl.BinaryLength];
+        var rightBytes = new byte[right.DiscretionaryAcl.BinaryLength];
+        left.DiscretionaryAcl.GetBinaryForm(leftBytes, 0);
+        right.DiscretionaryAcl.GetBinaryForm(rightBytes, 0);
+        return leftBytes.AsSpan().SequenceEqual(rightBytes);
     }
 }
