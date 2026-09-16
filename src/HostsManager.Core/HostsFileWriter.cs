@@ -231,6 +231,11 @@ public sealed class HostsFileWriter
                 AssertUnchanged(expected);
                 Files.Move(temp, HostsPath);
             }
+            // ReplaceFile can merge inherited ACEs from the two files. Reapply the
+            // captured DACL to our installed bytes before the final verification.
+            // Leave a detected external replacement alone for recovery to report.
+            if (HostsDocument.Sha256(Files.Read(HostsPath)) == HostsDocument.Sha256(bytes))
+                Files.ApplyPermissions(HostsPath, permissions);
             completed = true;
         }
         finally

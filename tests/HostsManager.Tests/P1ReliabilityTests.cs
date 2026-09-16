@@ -388,22 +388,15 @@ public sealed class P1ReliabilityTests : IDisposable
 
     [Fact]
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    public void PrivatePipeCommitsAndRestoresWithCallerOwnedBackups()
+    public async Task PrivatePipeCommitsAndRestoresWithCallerOwnedBackups()
     {
         if (!OperatingSystem.IsWindows()) return;
-        using var operations = new HelperProcesses();
-        var committer = new ElevatedHostsFileCommitter(_hosts, start =>
-            operations.Add(StartHost("pipe", start.ArgumentList[1], _hosts)));
-        var writer = new HostsFileWriter(_hosts, new BackupManager(_root, hostsPath: _hosts), committer: committer);
-        var doc = writer.Load();
-        var original = Assert.Single(writer.Backups.List());
-        doc.AddEntry("127.0.0.2", new[] { "pipe.test" });
-        try { Assert.True(writer.Save().Success); }
-        catch (Exception ex) { throw new Exception(operations.Errors.ToString(), ex); }
-        Assert.Contains("pipe.test", File.ReadAllText(_hosts));
-        Assert.True(writer.Restore(original).Success);
+        using var roundtrip = StartHost("roundtrip", _hosts, _root);
+        var errors = roundtrip.StandardError.ReadToEndAsync();
+        Assert.True(roundtrip.WaitForExit(20000));
+        Assert.True(roundtrip.ExitCode == 0, await errors);
         Assert.Equal(Original, File.ReadAllText(_hosts));
-        Assert.All(writer.Backups.List(), b => Assert.True(writer.Backups.Verify(b)));
+        Assert.All(Writer().Backups.List(), b => Assert.True(Writer().Backups.Verify(b)));
     }
 
     [Fact]

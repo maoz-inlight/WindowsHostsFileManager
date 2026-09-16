@@ -14,6 +14,31 @@ static void CheckFixture(string target)
         throw new InvalidOperationException("The integration host accepts marked test fixtures only.");
 }
 
+if (args.Length == 3 && args[0] == "roundtrip")
+{
+    if (!OperatingSystem.IsWindows()) return 3;
+    CheckFixture(args[1]);
+    var committer = new ElevatedHostsFileCommitter(args[1], request =>
+    {
+        var start = new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!)
+        {
+            UseShellExecute = false, CreateNoWindow = true,
+        };
+        start.ArgumentList.Add(System.Reflection.Assembly.GetExecutingAssembly().Location);
+        start.ArgumentList.Add("pipe");
+        start.ArgumentList.Add(request.ArgumentList[1]);
+        start.ArgumentList.Add(args[1]);
+        return System.Diagnostics.Process.Start(start);
+    });
+    var writer = new HostsFileWriter(args[1], new BackupManager(args[2], hostsPath: args[1]), committer: committer);
+    var document = writer.Load();
+    var original = writer.Backups.List().Single();
+    document.AddEntry("127.0.0.2", new[] { "pipe.test" });
+    writer.Save();
+    if (!File.ReadAllText(args[1]).Contains("pipe.test")) return 6;
+    writer.Restore(original);
+    return writer.Backups.List().All(writer.Backups.Verify) ? 0 : 7;
+}
 if (args.Length == 3 && args[0] == "pipe")
 {
     if (!OperatingSystem.IsWindows()) return 3;

@@ -16,7 +16,7 @@ different administrator account remains a manual acceptance check.
 
 ## Completed checks
 
-- Release test project: **204 passed, 0 failed, 0 skipped**, no build warnings.
+- Release test project: **206 passed, 0 failed, 0 skipped**, no build warnings.
 - Release solution build: **0 warnings, 0 errors**, including the WPF application.
 - Tests write disposable fixture files. They do not modify the live hosts file or create accounts.
 - README and design documentation now describe target-specific recovery, permission checks,

@@ -19,7 +19,7 @@ new target-specific history.
 
 ## Validation
 
-204 automated tests passed, including Windows permission checks, competing writer processes
+206 automated tests passed, including Windows permission checks, competing writer processes
 and authenticated pipe save/restore. The Release solution build passed with no warnings or
 errors. The user also exercised the fixture application successfully.
 
