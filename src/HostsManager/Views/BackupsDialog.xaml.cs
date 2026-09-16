@@ -15,6 +15,8 @@ public partial class BackupsDialog : Window
         InitializeComponent();
 
         _writer = writer;
+        LegacyNotice.Text = $"Backups belong to this target only. Earlier unscoped backups remain in {writer.Backups.RootDirectory}. " +
+            "Their target is unknown; inspect them before using Import entries.";
         ManualCommand.Text = $"copy /Y \"{writer.Backups.OriginalPath}\" \"{writer.HostsPath}\"";
 
         Refresh();
@@ -33,15 +35,15 @@ public partial class BackupsDialog : Window
             b.Reason,
             b.EntryCount > 0 ? b.EntryCount.ToString() : "—",
             $"{b.Bytes:N0} B",
-            _writer.Backups.Verify(b) ? "Yes" : "No")).ToList();
+            !b.HasRecordedHash ? "Unknown" : _writer.Backups.Verify(b) ? "Yes" : "No")).ToList();
     }
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e) =>
-        RestoreButton.IsEnabled = BackupGrid.SelectedItem is Row;
+        RestoreButton.IsEnabled = BackupGrid.SelectedItem is Row row && _writer.Backups.CanRestore(row.Entry);
 
     private void OnRestore(object sender, RoutedEventArgs e)
     {
-        if (BackupGrid.SelectedItem is not Row row) return;
+        if (BackupGrid.SelectedItem is not Row row || !_writer.Backups.CanRestore(row.Entry)) return;
 
         var answer = MessageBox.Show(this,
             $"Replace the current hosts file with this backup?\n\n{row.When} — {row.Reason}\n\n" +
@@ -65,11 +67,17 @@ public partial class BackupsDialog : Window
     }
 
     private void OnOpenFolder(object sender, RoutedEventArgs e)
+        => OpenFolder(_writer.Backups.Directory);
+
+    private void OnOpenLegacyFolder(object sender, RoutedEventArgs e)
+        => OpenFolder(_writer.Backups.RootDirectory);
+
+    private void OpenFolder(string directory)
     {
         try
         {
-            Directory.CreateDirectory(_writer.Backups.Directory);
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{_writer.Backups.Directory}\"")
+            Directory.CreateDirectory(directory);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{directory}\"")
             {
                 UseShellExecute = true,
             });

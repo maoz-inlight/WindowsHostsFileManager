@@ -22,7 +22,7 @@ public partial class App : Application
             return;
         }
 
-        var backups = new BackupManager(options.BackupsDirectory);
+        var backups = new BackupManager(options.BackupsDirectory, hostsPath: options.HostsPath);
         var needsElevation = ElevatedHostsFileCommitter.IsDefaultHostsPath(options.HostsPath)
                              && !ProcessPrivileges.IsAdministrator;
         var writer = new HostsFileWriter(options.HostsPath, backups, committer:
@@ -95,16 +95,15 @@ public partial class App : Application
     {
         try
         {
-            writer.Load();
-
-            var all = backups.List();
+            var all = backups.List().Where(backups.CanRestore).ToArray();
             var target = original
                 ? all.FirstOrDefault(b => b.IsOriginal)
                 : all.FirstOrDefault(b => !b.IsOriginal) ?? all.FirstOrDefault();
 
             if (target is null)
             {
-                MessageBox.Show($"No backups found in {backups.Directory}.",
+                MessageBox.Show($"No verified backups for this target were found in {backups.Directory}.\n\n" +
+                    $"Earlier unscoped backups remain in {backups.RootDirectory}. Inspect their contents before an intentional import.",
                     "Nothing to restore", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }

@@ -73,32 +73,31 @@ write pipeline refuses a save that modifies one.
 
 ## Core: the safe-write pipeline
 
-`HostsFileWriter.Save()` runs a fixed sequence of gates. Any failure aborts before the
-real file is touched:
+`HostsFileWriter.Save()` prepares and verifies the rendered document before committing.
+For the Windows hosts path, an authenticated local named pipe carries the request to a
+short-lived elevated helper. Both sides verify the peer process; the helper checks the
+initiating identity and process creation time. Backup operations impersonate the initiating
+user, preserving the configured backup root even when UAC uses another administrator.
+The privileged write accepts only the real Windows hosts path. Custom targets commit locally.
 
-For the real Windows hosts path, the ordinary UI prepares the verified bytes and sends
-them to a short-lived elevated helper. The helper is restricted to that one target and
-repeats the content verification and drift check before continuing through the same
-pipeline below. Writers pointed at a test copy use the pipeline directly without UAC.
+The commit holds a per-target global mutex across baseline read, backup and replacement.
+It independently parses proposed bytes, checks save drift, and compares managed sections
+against the destination baseline, including delimiters, order, encoding and line endings.
+An explicit restore instead requires a matching target manifest and recorded hash of the
+exact selected backup bytes; it may intentionally change managed sections.
 
-1. **Drift check** — compare a SHA-256 of the on-disk file against the hash captured at
-   load. If it changed (Docker or Tailscale rewrote it), refuse and prompt to reload.
-2. **Render** to a string from the line model; unmodified lines are emitted from their
-   preserved raw text.
-3. **Re-parse the rendered output** and assert the resulting model matches the intended
-   model line-for-line, including kind and ownership. This is the central malformation
-   guard — a render bug cannot reach disk.
-4. **Encoding check** — assert the rendered text survives an encode/decode round trip
-   under the file's own codec (see *Encoding is not always UTF-8* below). A character the
-   codec can't represent would otherwise be silently written as a substitute.
-5. **Structural assertions** — no null bytes, exactly the source's trailing-newline
-   behaviour preserved, managed-section regions unmodified.
-6. **Backup** the current bytes. A save cannot proceed if the backup fails.
-7. **Atomic replace** — write to a process-scoped temp file in the same directory, flush
-   to physical disk, then `File.Replace`, which is atomic on NTFS and preserves the
-   destination's ACLs. Falls back to `File.Move` only if `Replace` throws.
-8. **Post-write readback** — re-read the file from disk and compare its hash to what was
-   intended. A mismatch triggers an automatic rollback.
+Windows DACL capture is mandatory. The unique sibling temporary file is flushed, receives
+the captured access rules, and is checked before replacement. `File.Replace` uses strict
+metadata handling; a fallback move requires unchanged destination bytes and a prepared
+file with the original access rules. Final bytes and DACL are verified. Recovery reports
+whether the original state was restored, external content was retained, or the state could
+not be established, and identifies the recovery backup. It never deliberately rolls back
+over detected external edits. Owner, group and audit SACL preservation are not asserted.
+
+Late drift checks narrow races with Docker, Tailscale and other editors; the global lock
+only coordinates Hosts Manager writers. An unrelated writer can still race replacement.
+Target identity canonicalizes paths and resolves existing links; different hard-link paths
+are not unified into one target identity.
 
 ### Encoding is not always UTF-8
 
@@ -111,18 +110,19 @@ unparseable bytes silently replaced with `U+FFFD`.
 
 ## Backup & recovery
 
-`BackupManager.cs`. Location: `%LOCALAPPDATA%\HostsManager\backups` — deliberately
-user-scoped, not under `System32`, so backups stay readable and restorable without
-elevation, which is exactly the situation you're in when something has gone wrong.
+`BackupManager.cs` stores history under `%LOCALAPPDATA%\HostsManager\backups\targets\<target-key>`.
+An explicit backup directory changes the root. Each target has its own original, retention
+and restore selection, with target provenance recorded in its manifests. Backup files use
+exclusive creation and manifests are published after the bytes are flushed.
 
-- A backup is taken automatically before every save, and before every restore (so a
-  restore is itself undoable).
-- `hosts.original.bak` captures the pre-app state on first launch and is never pruned.
-- The last 50 timestamped backups are kept, each with a `.json` manifest recording
-  timestamp, hash, size, encoding, entry count, and the action that triggered it.
-- Recovery works without the app: backups are plain files, restorable with a one-line
-  `copy` command from an elevated prompt, or via `--restore-latest` / `--restore-original`
-  headless flags.
+A backup precedes each save and restore. The first capture in this target history becomes
+`hosts.original.bak`, which is never pruned; up to 50 timestamped backups are retained.
+Legacy root files are retained for inspection through Earlier backups, never automatically
+assigned to a target. Missing or invalid metadata is unverified and cannot be automatically
+restored. Restore reads and verifies the exact byte buffer that will be committed.
+Headless Original/Latest recovery reports missing compatible history without manufacturing
+an Original first. See README for manual recovery and [P1 implementation](p1-implementation.md)
+for verification coverage and remaining Windows integration checks.
 
 ## Validation
 
@@ -166,7 +166,7 @@ browser profile. That prevents an existing browser process with a different rule
 swallowing the new launch arguments. Repeated hostnames are combined only when their
 targets agree; conflicting targets stop the launch and identify the hostname.
 
-The main app is elevated, so a normal child process would inherit administrator rights.
+When the app is explicitly launched elevated, a normal child process would inherit administrator rights.
 Browser launch therefore uses the interactive Windows shell token, creates the process
 suspended, verifies that the child is not elevated, and only then lets it execute. Failure
 to prove that boundary cancels the launch.

@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HostsManager.Tests", "tests
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HostsManager.Core", "src\HostsManager.Core\HostsManager.Core.csproj", "{9BF75E08-1F13-4947-95FD-FE3E3A309422}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HostsManager.TestHost", "tests\HostsManager.TestHost\HostsManager.TestHost.csproj", "{18071F5A-0AE9-4F93-AAF5-1556F000F3DB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -34,10 +36,15 @@ Global
 		{9BF75E08-1F13-4947-95FD-FE3E3A309422}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9BF75E08-1F13-4947-95FD-FE3E3A309422}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9BF75E08-1F13-4947-95FD-FE3E3A309422}.Release|Any CPU.Build.0 = Release|Any CPU
+		{18071F5A-0AE9-4F93-AAF5-1556F000F3DB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{18071F5A-0AE9-4F93-AAF5-1556F000F3DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{18071F5A-0AE9-4F93-AAF5-1556F000F3DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{18071F5A-0AE9-4F93-AAF5-1556F000F3DB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{6C60FB2B-947A-422F-BAF2-D7C7F5AE7615} = {B969C337-2A69-4A8E-9D51-E34D6AEF7D6D}
 		{FA3CD393-AABB-439E-AECB-D1EA2549ECBC} = {AC207D48-11D5-4D89-AEE0-6E156B17E871}
 		{9BF75E08-1F13-4947-95FD-FE3E3A309422} = {B969C337-2A69-4A8E-9D51-E34D6AEF7D6D}
+		{18071F5A-0AE9-4F93-AAF5-1556F000F3DB} = {AC207D48-11D5-4D89-AEE0-6E156B17E871}
 	EndGlobalSection
 EndGlobal

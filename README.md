@@ -88,9 +88,10 @@ entries and opening an isolated Edge or Chrome window does not need UAC. Saving,
 or toggling from the tray starts a short-lived elevated copy that performs only that
 hosts-file write and exits.
 
-The elevated helper accepts only the real Windows hosts path and Hosts Manager's own backup
-directory. It rechecks the proposed bytes, the drift hash, the backup, the atomic replace,
-and the final on-disk hash itself instead of trusting the ordinary UI process.
+The elevated helper accepts only the real Windows hosts path. An authenticated local pipe
+connects it to the initiating process, including when UAC uses another administrator account.
+Backup operations run under the initiating user's identity and retain the configured backup root.
+The helper independently verifies content, drift, target provenance, and final bytes and access rules.
 
 Two other deliberate consequences:
 
@@ -99,10 +100,9 @@ Two other deliberate consequences:
   Windows shipped it with. If a security product blocks `File.Replace` outright, the
   fallback is a move — which would otherwise hand the file the temp file's permissions, so
   the original access rules are captured beforehand and reapplied. If they can't be
-  reapplied, the save reports it rather than quietly leaving the file more permissive.
+  captured, applied to the temporary file, and verified, the replacement is refused.
 - Backups go to `%LOCALAPPDATA%`, **not** under `System32`. That keeps them readable and
-  restorable *without* elevation, which is exactly the situation you're in when something
-  has gone wrong.
+  available without elevation. Restoring into the system hosts file still requires elevation.
 
 To rehearse changes without elevation, point the app at a copy. Custom paths are written
 directly by the ordinary process and never invoke the elevated helper:
@@ -226,8 +226,8 @@ as before and their entries arrive ungrouped.
 
 There is no Windows API for the hosts file — it is plain text, and every tool that manages it
 (including this one) rewrites the whole file. Safety comes from the pipeline, not from who does
-the writing. Every save passes through these gates, and any failure aborts before the file
-changes:
+the writing. Every save passes through these gates; failures after replacement report the
+verified recovery outcome:
 
 1. **Drift check** — if the file changed on disk since it was loaded (Docker and Tailscale rewrite
    it on their own schedule), the save is refused rather than clobbering those changes.
@@ -235,38 +235,47 @@ changes:
    verbatim.
 3. **Re-parse and verify** — the rendered text is parsed back and compared line by line against
    the model it came from. A render bug fails here, in memory, instead of reaching disk.
-4. **Structural checks** — no null bytes, no lost trailing newline, no modified read-only line.
+4. **Structural checks** — no null bytes, no lost trailing newline. Managed sections are
+   independently compared with the actual destination baseline, including boundaries and line endings.
 5. **Backup** — if the backup can't be written, the save doesn't happen.
 6. **Atomic replace** — written to a temp file, flushed to physical disk, then swapped in with
-   `File.Replace`, which is atomic on NTFS and preserves the destination's ACLs.
+   `File.Replace` with strict metadata handling. Windows access rules are captured, applied
+   to the temporary file and verified; the fallback move requires the same checks.
 7. **Read back** — the bytes on disk are hashed and compared to what was meant to be written. A
-   mismatch triggers an automatic rollback.
+   mismatch or changed access rules triggers recovery. A detected external edit is retained.
 
-Steps 5–7 are one shared routine, so **restoring a backup runs the same gates as saving** rather
-than being a separate, weaker path. If a rollback ever fails too, it says so and points at the
-backup instead of claiming the file is untouched. Restore deliberately skips only step 1: it
-overwrites on purpose, and step 5 captures whatever it replaced.
+Save and restore share the backup, replacement and recovery routine. A per-target system-wide
+lock serializes cooperating writers, with another drift check immediately before replacement.
+Unrelated tools do not take that lock, so a final race remains possible. Recovery never
+overwrites detected external content and identifies the recovery backup if it cannot restore safely.
+An explicit restore verifies the selected backup's target and recorded hash; it may deliberately
+change managed sections and does not require the old load hash. Late drift checks still apply.
 
 The file's **UTF-8 BOM and CRLF line endings are preserved exactly**, never normalized. The status
 bar shows the detected encoding as visible proof.
 
 ## Backups
 
-Stored in `%LOCALAPPDATA%\HostsManager\backups` — deliberately user-scoped rather than beside the
-hosts file in `System32`, so they stay readable and restorable without elevation, which is exactly
-the situation you're in when something has gone wrong.
+Stored under `%LOCALAPPDATA%\HostsManager\backups\targets\<target-key>`, with a separate history
+for each canonical target path. `--backups-dir` changes the root, retaining this separation.
+Backups remain readable without elevation; writing the system hosts file requires elevation.
 
 - A backup is taken **before every save**, and before every restore, so a restore can be undone.
-- `hosts.original.bak` captures the state before this app ever ran and is **never pruned**.
+- `hosts.original.bak` captures the first state recorded in that target's history and is **never pruned**.
 - The last 50 timestamped backups are kept; each has a `.json` manifest recording the timestamp,
-  SHA-256, size, encoding and what triggered it.
+  SHA-256, target path, size, encoding and what triggered it. Files are created exclusively.
+- Older files in the backup root remain available through **Earlier backups**. Their target
+  is unknown, so inspect them before importing; they are never silently adopted as an Original.
+- Missing or invalid metadata prevents automatic restore. Original/Latest commands report
+  when no compatible backup exists instead of creating a new Original during recovery.
 
 ### Recovering without the app
 
-Backups are plain text. From an elevated Command Prompt:
+Backups are plain text. Use the exact target-specific path shown in **Backups**, check its
+manifest and content, then copy from an elevated Command Prompt:
 
 ```bash
-copy /Y "%LOCALAPPDATA%\HostsManager\backups\hosts.original.bak" "%WINDIR%\System32\drivers\etc\hosts"
+copy /Y "C:\path-from-backups-dialog\hosts.original.bak" "%WINDIR%\System32\drivers\etc\hosts"
 ```
 
 Or run `HostsManager.exe --restore-original`.

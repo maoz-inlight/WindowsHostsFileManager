@@ -22,10 +22,19 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\HostsManager.Core\HostsManager.Core.csproj" />
+    <ProjectReference Include="..\HostsManager.TestHost\HostsManager.TestHost.csproj" ReferenceOutputAssembly="false" />
+    <Compile Include="../../src/HostsManager/Services/ElevatedHostsFileCommitter.cs" Link="Services/ElevatedHostsFileCommitter.cs" />
+    <Compile Include="../../src/HostsManager/Services/ProcessPrivileges.cs" Link="Services/ProcessPrivileges.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <Target Name="CopyIntegrationHost" AfterTargets="Build">
+    <ItemGroup>
+      <IntegrationHostFiles Include="../HostsManager.TestHost/bin/$(Configuration)/net8.0/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(IntegrationHostFiles)" DestinationFolder="$(OutDir)integration-host" />
+  </Target>
 </Project>

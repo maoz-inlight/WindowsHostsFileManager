@@ -16,7 +16,7 @@ public class WriterTests : IDisposable
     public WriterTests()
     {
         _hostsPath = Fixture.CopyToTemp(out _workDir);
-        _backups = new BackupManager(Path.Combine(_workDir, "backups"));
+        _backups = new BackupManager(Path.Combine(_workDir, "backups"), hostsPath: _hostsPath);
         _writer = new HostsFileWriter(_hostsPath, _backups);
     }
 
@@ -377,7 +377,7 @@ public class WriterTests : IDisposable
     [Fact]
     public void Retention_PrunesOldestFirstAndKeepsTheOriginal()
     {
-        var backups = new BackupManager(Path.Combine(_workDir, "retained"), retention: 3);
+        var backups = new BackupManager(Path.Combine(_workDir, "retained"), retention: 3, hostsPath: _hostsPath);
         var writer = new HostsFileWriter(_hostsPath, backups);
         writer.Load();
 
@@ -404,8 +404,9 @@ public class WriterTests : IDisposable
         File.Delete(result.BackupPath + ".json");
 
         var rebuilt = _backups.List().First(b => b.FilePath == result.BackupPath);
-        Assert.Equal("Unknown", rebuilt.Reason);
-        Assert.True(_backups.Verify(rebuilt));
+        Assert.Contains("Unknown", rebuilt.Reason);
+        Assert.False(_backups.Verify(rebuilt));
+        Assert.False(_backups.CanRestore(rebuilt));
     }
 
     // ---- split-elevation handoff -----------------------------------------
@@ -424,7 +425,7 @@ public class WriterTests : IDisposable
         Assert.True(result.Success);
         Assert.NotNull(committer.Request);
         Assert.Equal(_hostsPath, committer.Request.HostsPath);
-        Assert.Equal(_backups.Directory, committer.Request.BackupsDirectory);
+        Assert.Equal(_backups.RootDirectory, committer.Request.BackupsRoot);
         Assert.Equal(HostsDocument.Sha256(before), committer.Request.ExpectedSha256);
         Assert.Equal("Elevated test save", committer.Request.BackupReason);
         Assert.True(committer.Request.RefuseOnDrift);
@@ -439,8 +440,8 @@ public class WriterTests : IDisposable
         doc.AddEntry("127.0.0.1", new[] { "intended.local" });
         var intended = doc.Format.Encode(doc.Render());
         var request = new PreparedHostsWrite(
-            _hostsPath, _backups.Directory, intended, _writer.LoadedSha256,
-            "Prepared save", RefuseOnDrift: true);
+            _hostsPath, _backups.RootDirectory, intended, _writer.LoadedSha256,
+            "Prepared save", Operation: HostsWriteOperation.Save);
 
         const string external = "127.0.0.1 external-change.local\r\n";
         File.WriteAllText(_hostsPath, external);
@@ -457,8 +458,8 @@ public class WriterTests : IDisposable
         var before = OnDisk;
         var tampered = System.Text.Encoding.UTF8.GetBytes("127.0.0.1 bad\0host.local\r\n");
         var request = new PreparedHostsWrite(
-            _hostsPath, _backups.Directory, tampered, _writer.LoadedSha256,
-            "Tampered handoff", RefuseOnDrift: true);
+            _hostsPath, _backups.RootDirectory, tampered, _writer.LoadedSha256,
+            "Tampered handoff", Operation: HostsWriteOperation.Save);
 
         var helperWriter = new HostsFileWriter(_hostsPath, _backups);
         Assert.Throws<HostsVerificationException>(() => helperWriter.CommitPrepared(request));

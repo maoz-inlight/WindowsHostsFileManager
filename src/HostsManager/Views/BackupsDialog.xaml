@@ -42,6 +42,8 @@
         <Border Grid.Row="2" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border0}"
                 BorderThickness="0,1,0,0" Padding="14,10">
             <StackPanel>
+                <TextBlock x:Name="LegacyNotice" TextWrapping="Wrap" FontSize="11"
+                           Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,8" />
                 <TextBlock Text="If this app will not start, restore by hand from an elevated Command Prompt:"
                            FontSize="11" Foreground="{DynamicResource TextMuted}" />
                 <TextBox x:Name="ManualCommand" Style="{StaticResource FlatTextBox}"
@@ -52,8 +54,10 @@
         <Border Grid.Row="3" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border0}"
                 BorderThickness="0,1,0,0" Padding="14,10">
             <Grid>
-                <Button Content="Open folder" Style="{StaticResource ToolButton}" Padding="14,7"
-                        HorizontalAlignment="Left" Click="OnOpenFolder" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <Button Content="Open folder" Style="{StaticResource ToolButton}" Padding="10,7" Click="OnOpenFolder" />
+                    <Button Content="Earlier backups" Style="{StaticResource ToolButton}" Padding="10,7" Click="OnOpenLegacyFolder" />
+                </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Close" Style="{StaticResource ToolButton}" Padding="16,7" IsCancel="True" />
                     <Button x:Name="RestoreButton" Content="Restore selected" Style="{StaticResource PrimaryButton}"

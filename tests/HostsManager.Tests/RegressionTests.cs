@@ -261,7 +261,7 @@ public class RegressionTests
         var hostsPath = Fixture.CopyToTemp(out var workDir);
         try
         {
-            var backups = new BackupManager(Path.Combine(workDir, "backups"));
+            var backups = new BackupManager(Path.Combine(workDir, "backups"), hostsPath: hostsPath);
             var writer = new HostsFileWriter(hostsPath, backups);
 
             var doc = writer.Load();
@@ -292,7 +292,7 @@ public class RegressionTests
         var hostsPath = Fixture.CopyToTemp(out var workDir);
         try
         {
-            var backups = new BackupManager(Path.Combine(workDir, "backups"));
+            var backups = new BackupManager(Path.Combine(workDir, "backups"), hostsPath: hostsPath);
             var writer = new HostsFileWriter(hostsPath, backups);
             writer.Load();
 
@@ -325,7 +325,7 @@ public class RegressionTests
         var hostsPath = Fixture.CopyToTemp(out var workDir);
         try
         {
-            var backups = new BackupManager(Path.Combine(workDir, "backups"));
+            var backups = new BackupManager(Path.Combine(workDir, "backups"), hostsPath: hostsPath);
             var writer = new HostsFileWriter(hostsPath, backups);
             writer.Load();
 
@@ -354,7 +354,7 @@ public class RegressionTests
         var hostsPath = Fixture.CopyToTemp(out var workDir);
         try
         {
-            var backups = new BackupManager(Path.Combine(workDir, "backups"));
+            var backups = new BackupManager(Path.Combine(workDir, "backups"), hostsPath: hostsPath);
             var writer = new HostsFileWriter(hostsPath, backups);
             writer.Load();
 
