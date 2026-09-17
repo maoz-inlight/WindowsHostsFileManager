@@ -268,6 +268,13 @@ public sealed class BrowserPreviewService : IDisposable
             throw new InvalidOperationException("The isolated browser exited before its window opened.");
         }
 
+        try
+        {
+            Profiles.RecordLaunch(new(browser.Kind.ToString().ToLowerInvariant(), profileKey, profile),
+                overrides.Select(mapping => $"{mapping.Hostname} → {mapping.Target}"), flags);
+        }
+        catch (IOException) { /* Preview still works if its descriptive metadata cannot be saved. */ }
+        catch (UnauthorizedAccessException) { }
         return session;
         }
         finally { profileMutex.ReleaseMutex(); }

@@ -47,6 +47,32 @@ public sealed class BrowserPreviewProfilesTests : IDisposable
     }
 
     [Fact]
+    public void LaunchDetailsIdentifyProfilesAndStorage()
+    {
+        var profile = Create();
+        Store.RecordLaunch(profile, new[] { "api.example.test → 127.0.0.1" }, new[] { "--disable-extensions" });
+        var listed = Assert.Single(Store.List());
+        Assert.Contains("api.example.test", listed.DisplayName);
+        Assert.NotNull(listed.Metadata);
+        var details = Store.Describe(listed);
+        Assert.Contains("--disable-extensions", details);
+        Assert.Contains("Disk usage:", details);
+        Assert.Contains("Last launched:", details);
+        Assert.Contains(profile.Path, details);
+    }
+
+    [Fact]
+    public void OldOrCorruptMetadataIsExplicitlyUnknown()
+    {
+        var profile = Create();
+        Assert.Contains("mappings unknown", Assert.Single(Store.List()).DisplayName);
+        File.WriteAllText(Path.Combine(profile.Path, "hostsmanager-preview.json"), "broken json");
+        Assert.Null(Assert.Single(Store.List()).Metadata);
+        Assert.Contains("Mappings: unknown", Store.Describe(profile));
+        Assert.Contains("Disk usage:", Store.Describe(profile));
+    }
+
+    [Fact]
     public void EmptyStoreDoesNotCreateDirectories()
     {
         Assert.Empty(Store.List());

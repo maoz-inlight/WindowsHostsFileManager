@@ -22,19 +22,24 @@ public partial class BrowserProfilesDialog : Window
 
     private void OnRefresh(object sender, RoutedEventArgs e) => RefreshProfiles();
 
-    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (DeleteButton is null || SelectedPath is null) return;
         var selected = ProfilesList.SelectedItem as BrowserPreviewProfile;
         DeleteButton.IsEnabled = selected is not null;
-        SelectedPath.Text = selected?.Path ?? "";
+        SelectedPath.Text = selected is null ? "Select a profile to inspect its mappings, options, dates and disk usage." : "Reading profile details…";
+        if (selected is null) return;
+        string details;
+        try { details = await Task.Run(() => BrowserPreviewService.Profiles.Describe(selected)); }
+        catch (Exception ex) { details = $"Could not read profile details: {ex.Message}\n{selected.Path}"; }
+        if (Equals(ProfilesList.SelectedItem, selected)) SelectedPath.Text = details;
     }
 
     private void OnDelete(object sender, RoutedEventArgs e)
     {
         if (ProfilesList.SelectedItem is not BrowserPreviewProfile profile) return;
         if (MessageBox.Show(this,
-                $"Permanently delete cookies, sign-ins, history and cache in this preview profile?\n\n{profile.Path}\n\nThis cannot be undone.",
+                $"Permanently delete cookies, sign-ins, history and cache in this preview profile?\n\n{profile.DisplayName}\n{profile.Path}\n\nThis cannot be undone.",
                 "Delete preview data", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
         try { BrowserPreviewService.DeleteProfile(profile); }
         catch (Exception ex) { ShowError(ex); }

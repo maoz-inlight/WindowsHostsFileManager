@@ -10,21 +10,24 @@
 - A16: Accessible names on primary controls and row toggles, visible keyboard focus,
   stronger muted text in both themes, Ctrl+F search, grid-scoped Delete and F2, horizontal grid
   scrolling, named tray actions and initial tray keyboard focus. Refreshed light screenshot.
-- A17: More actions → Browser preview data lists retained app profiles and paths. Cleanup
-  requires selecting a profile and confirming data loss. It accepts only app-owned Edge/Chrome
-  twelve-hex-character profile directories, rejects linked paths and checks all matching
-  browser processes. Normal browser processes also block cleanup deliberately. Process-query
-  errors fail closed. A shared mutex coordinates cleanup and launch in this Windows session.
-  Existing legacy profiles matching the established layout remain manageable. No automatic
-  cleanup occurs and no actual user profile data was deleted during development.
+- A17: More actions → Browser preview data lists retained app profiles, mapped hostnames,
+  options, last-used timestamps and measured disk usage. Metadata is saved on preview launch
+  and loaded asynchronously on selection. Older or unrecorded profiles display dates and size
+  with mappings marked as unknown until reused. Cleanup requires selecting a profile and
+  confirming data loss. It accepts only app-owned Edge/Chrome twelve-hex-character profile
+  directories, rejects linked paths and checks all matching browser processes. Normal browser
+  processes also block cleanup deliberately. Process-query errors fail closed. A shared mutex
+  coordinates cleanup and launch in this Windows session. Existing legacy profiles matching
+  the established layout remain manageable. No automatic cleanup occurs and no actual user
+  profile data was deleted during development.
 - A18: Exact SDK policy, local WiX, NuGet locks, weekly dependency checks, architecture CI,
   checksum generation/verification and draft-first release publication with remote digest checks.
 
 ## Automated validation
 
-218 tests passed, including edit formatting/group/state/validation/managed protections,
-save/reload, selected-profile deletion, invalid-path rejection, active-browser refusal and
-process-query failure. Desktop build passed with zero warnings/errors. Locked solution restore
+220 tests passed, including edit formatting/group/state/validation/managed protections,
+save/reload, selected-profile deletion, invalid-path rejection, active-browser refusal,
+profile metadata recording/inspection and process-query failure. Desktop build passed with zero warnings/errors. Locked solution restore
 passed; all three architectures packaged with locked dependencies. Checksum verifier accepted
 a valid disposable artifact and rejected modified bytes.
 
