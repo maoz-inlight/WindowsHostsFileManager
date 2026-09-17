@@ -169,18 +169,7 @@ public sealed class HostsDocument
     /// </summary>
     public HostsLine AddEntry(string ip, IReadOnlyList<string> hostnames, string? comment = null)
     {
-        var ipCheck = HostsValidator.ValidateIp(ip);
-        if (!ipCheck.IsValid) throw new ArgumentException(ipCheck.Error, nameof(ip));
-
-        if (hostnames.Count == 0) throw new ArgumentException("Enter at least one domain name.", nameof(hostnames));
-        foreach (var host in hostnames)
-        {
-            var check = HostsValidator.ValidateHostname(host);
-            if (!check.IsValid) throw new ArgumentException(check.Error, nameof(hostnames));
-        }
-
-        var commentCheck = HostsValidator.ValidateComment(comment);
-        if (!commentCheck.IsValid) throw new ArgumentException(commentCheck.Error, nameof(comment));
+        ValidateMapping(ip, hostnames, comment);
 
         var body = $"{ip} {string.Join(' ', hostnames)}";
         if (!string.IsNullOrWhiteSpace(comment)) body += $" # {comment.Trim()}";
@@ -201,6 +190,67 @@ public sealed class HostsDocument
         EnsureLineSeparators();
         SettleIfUnchanged();
         return line;
+    }
+
+    /// <summary>Edits only the requested fields; separators, state and surrounding lines survive.</summary>
+    public void EditEntry(HostsLine line, string ip, IReadOnlyList<string> hostnames, string? comment = null)
+    {
+        Guard(line);
+        if (!line.IsEntry) throw new InvalidOperationException("Only hosts entries can be edited.");
+        ValidateMapping(ip, hostnames, comment);
+        comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+
+        // Patch tokens from right to left so offsets remain valid. A no-op edit must
+        // preserve even unusual spacing and an empty trailing comment marker.
+        var body = line.Body;
+        var commentAt = body.IndexOf('#');
+        var mappingEnd = commentAt < 0 ? body.Length : commentAt;
+        var tokens = System.Text.RegularExpressions.Regex.Matches(body[..mappingEnd], @"\S+");
+        if (!string.Equals(comment, string.IsNullOrWhiteSpace(line.InlineComment) ? null : line.InlineComment.Trim(), StringComparison.Ordinal))
+        {
+            body = commentAt < 0
+                ? body + (comment is null ? "" : " # " + comment)
+                : body[..commentAt] + (comment is null ? "" : "# " + comment);
+        }
+        if (!line.Hostnames.SequenceEqual(hostnames))
+        {
+            if (hostnames.Count == line.Hostnames.Count)
+            {
+                for (var i = hostnames.Count; i >= 1; i--)
+                    body = body.Remove(tokens[i].Index, tokens[i].Length).Insert(tokens[i].Index, hostnames[i - 1]);
+            }
+            else
+            {
+                var start = tokens[1].Index;
+                var end = tokens[^1].Index + tokens[^1].Length;
+                body = body.Remove(start, end - start).Insert(start, string.Join(' ', hostnames));
+            }
+        }
+        if (line.Ip != ip)
+            body = body.Remove(tokens[0].Index, tokens[0].Length).Insert(tokens[0].Index, ip);
+
+        line.Body = body;
+        line.Ip = ip;
+        line.Hostnames = hostnames.ToArray();
+        line.InlineComment = comment;
+        SettleIfUnchanged();
+    }
+
+    private static void ValidateMapping(string ip, IReadOnlyList<string> hostnames, string? comment)
+    {
+        var ipCheck = HostsValidator.ValidateIp(ip);
+        if (!ipCheck.IsValid) throw new ArgumentException(ipCheck.Error, nameof(ip));
+
+        if (hostnames.Count == 0) throw new ArgumentException("Enter at least one domain name.", nameof(hostnames));
+        foreach (var host in hostnames)
+        {
+            var check = HostsValidator.ValidateHostname(host);
+            if (!check.IsValid) throw new ArgumentException(check.Error, nameof(hostnames));
+        }
+
+        var commentCheck = HostsValidator.ValidateComment(comment);
+        if (!commentCheck.IsValid) throw new ArgumentException(commentCheck.Error, nameof(comment));
+
     }
 
     /// <summary>

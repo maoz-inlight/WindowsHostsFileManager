@@ -144,6 +144,8 @@ try {
                 if (-not (Test-Path $path)) { Fail "build.ps1 did not produce $_" }
                 $path
             }
+        $assets += Join-Path $distRoot 'SHA256SUMS.txt'
+        & (Join-Path $PSScriptRoot 'Verify-Checksums.ps1')
     }
     catch {
         Write-Host "`nRolling back the version bump." -ForegroundColor Yellow
@@ -160,12 +162,27 @@ try {
     Invoke-Native 'git' @('push', '--quiet', 'origin', $tag) "Pushing $tag failed. master is pushed; the tag is local only."
 
     Step 'Publishing the release'
-    $ghArgs = @('release', 'create', $tag, '--title', $tag) + $assets
+    $ghArgs = @('release', 'create', $tag, '--title', $tag, '--verify-tag', '--draft') + $assets
     if ($NotesFile) { $ghArgs += @('--notes-file', $NotesFile) } else { $ghArgs += '--generate-notes' }
-    if ($Draft) { $ghArgs += '--draft' }
 
     Invoke-Native 'gh' $ghArgs ("gh release create failed, but $tag is already pushed. Re-run just the upload:`n" +
         "  gh release create $tag dist/* --title $tag")
+
+    # Keep partial uploads private. Check GitHub's recorded SHA-256 and size before publishing.
+    $releaseJson = & gh release view $tag --json assets
+    if ($LASTEXITCODE -ne 0) { Fail 'Could not verify uploaded assets; release remains a draft.' }
+    $uploaded = ($releaseJson | ConvertFrom-Json).assets
+    foreach ($path in $assets) {
+        $local = Get-Item -LiteralPath $path
+        $remote = @($uploaded | Where-Object name -eq $local.Name)
+        $digest = 'sha256:' + (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($remote.Count -ne 1 -or $remote[0].size -ne $local.Length -or $remote[0].digest -ne $digest) {
+            Fail "Uploaded asset verification failed for $($local.Name); release remains a draft."
+        }
+    }
+    if (-not $Draft) {
+        Invoke-Native 'gh' @('release', 'edit', $tag, '--draft=false', '--latest') 'Publishing failed; inspect the draft release.'
+    }
 
     Step 'Done'
     if ($Draft) {

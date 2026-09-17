@@ -4,6 +4,7 @@ obj/
 publish/
 dist/
 *.wixpdb
+.wix/
 
 # Unelevated rehearsal build (see "Administrator rights" in the README)
 build/

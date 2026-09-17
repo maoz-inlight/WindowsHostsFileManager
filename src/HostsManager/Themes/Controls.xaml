@@ -10,6 +10,16 @@
     <FontFamily x:Key="UiFont">Segoe UI</FontFamily>
     <FontFamily x:Key="MonoFont">Consolas</FontFamily>
 
+    <Style x:Key="KeyboardFocus" TargetType="Control">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Rectangle Margin="1" Stroke="{DynamicResource Accent}" StrokeThickness="2" StrokeDashArray="2 1" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
@@ -19,6 +29,7 @@
 
     <!-- Toolbar button: transparent until hovered, never shouty. -->
     <Style x:Key="ToolButton" TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}" />
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="12.5" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
@@ -74,6 +85,7 @@
 
     <!-- Full-width row button for popup menus, e.g. the tray menu. -->
     <Style x:Key="TrayRowButton" TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Padding" Value="10,7" />
@@ -95,6 +107,7 @@
 
     <!-- Small round icon button, e.g. the About glyph in the header. -->
     <Style x:Key="IconButton" TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}" />
         <Setter Property="Width" Value="26" />
         <Setter Property="Height" Value="26" />
         <Setter Property="Cursor" Value="Hand" />
@@ -193,6 +206,7 @@
 
     <!-- Toggle switch. Reads faster than a checkbox in a dense list. -->
     <Style x:Key="ToggleSwitch" TargetType="CheckBox">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Template">
@@ -465,7 +479,7 @@
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="DataGridCell">

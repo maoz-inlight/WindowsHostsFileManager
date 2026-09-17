@@ -6,9 +6,20 @@ namespace HostsManager.Views;
 
 public partial class AddEntryDialog : Window
 {
-    public AddEntryDialog()
+    private readonly HostsLine? _entry;
+
+    public AddEntryDialog(HostsLine? entry = null)
     {
+        _entry = entry;
         InitializeComponent();
+        if (entry is not null)
+        {
+            Title = "Edit entry";
+            AddButton.Content = "Apply";
+            DomainBox.Text = string.Join(' ', entry.Hostnames);
+            IpBox.Text = entry.Ip;
+            CommentBox.Text = entry.InlineComment ?? "";
+        }
         Loaded += (_, _) => { DomainBox.Focus(); Validate(); };
     }
 
@@ -17,8 +28,8 @@ public partial class AddEntryDialog : Window
     private void OnChanged(object sender, RoutedEventArgs e) => Validate();
 
     /// <summary>
-    /// Validates as the user types and previews the exact line that will be written,
-    /// so nothing lands in the file that hasn't already been shown and checked.
+    /// Validates as the user types and previews the mapping. Editing preserves
+    /// existing separators, so the saved whitespace can differ from this preview.
     /// </summary>
     private void Validate()
     {
@@ -47,7 +58,7 @@ public partial class AddEntryDialog : Window
             error ??= HostsValidator.ValidateComment(comment).Error;
 
             PreviewText.Text = error is null
-                ? $"{ip} {string.Join(' ', hostnames)}" + (comment.Length > 0 ? $" # {comment}" : "")
+                ? (_entry is { IsEnabled: false } ? _entry.DisablePrefix : "") + $"{ip} {string.Join(' ', hostnames)}" + (comment.Length > 0 ? $" # {comment}" : "")
                 : "—";
         }
 
@@ -58,6 +69,8 @@ public partial class AddEntryDialog : Window
 
     private void OnAdd(object sender, RoutedEventArgs e)
     {
+        Validate();
+        if (!AddButton.IsEnabled) return;
         var hostnames = DomainBox.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         var comment = CommentBox.Text.Trim();
 

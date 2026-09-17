@@ -1,60 +1,46 @@
 name: CI
-
-# The regression suite is this project's main safety net for a program that rewrites a
-# system file, so it runs on every push and PR. Windows-only by necessity: the app is WPF
-# and the installer is WiX, neither of which builds elsewhere.
 on:
   push:
     branches: [master]
   pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
-  build:
+  test:
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
-
-      - name: Restore
-        run: dotnet restore
-
-      # Core plus the tests. Runs first so a logic regression fails fast, before the
-      # slower WPF and installer builds.
+          global-json-file: global.json
+      - name: Restore locked dependencies
+        run: dotnet restore --locked-mode
       - name: Test
         run: dotnet test --no-restore --configuration Release --verbosity normal
-
-      # The tests only reference HostsManager.Core, so nothing above compiles the WPF
-      # project. Without this, a broken XAML binding or a UI compile error would sail
-      # through a green run.
-      - name: Build the app
+      - name: Build desktop app
         run: dotnet build src/HostsManager/HostsManager.csproj --no-restore --configuration Release
-
-      - name: Install WiX
-        run: |
-          dotnet tool install --global wix --version 5.0.2
-          wix extension add -g WixToolset.UI.wixext/5.0.2
-          wix extension add -g WixToolset.Util.wixext/5.0.2
-
-      # One architecture is enough to catch a broken Package.wxs; all three would just be
-      # the same authoring compiled three times.
-      - name: Build the x64 installer
-        run: ./installer/build.ps1 -Architectures x64
+  package:
+    needs: test
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, x86, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build and verify packages
+        run: ./installer/build.ps1 -Architectures ${{ matrix.arch }}
         shell: pwsh
-
       - uses: actions/upload-artifact@v4
         with:
-          name: installer-x64
-          # Globbed over the version: the file names carry the version from
-          # Directory.Build.props, which moves with every release.
+          name: installer-${{ matrix.arch }}
           path: |
-            dist/HostsManager-*-x64-Setup.msi
-            dist/HostsManager-*-x64-Portable.exe
+            dist/HostsManager-*-${{ matrix.arch }}-Setup.msi
+            dist/HostsManager-*-${{ matrix.arch }}-Portable.exe
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
           retention-days: 14

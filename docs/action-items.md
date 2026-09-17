@@ -10,6 +10,8 @@ P1 = address before broader deployment. P2 = maintenance correctness or responsi
 
 Effort is relative implementation and validation scope, not a delivery estimate: **S** is localized, **M** crosses a few components, **L** crosses process, platform or recovery boundaries. Every selected fix includes relevant regression checks and updates to affected documentation.
 
+**Current batch (17 September): A15, A16, A17 and A18 selected and implemented for 1.0.15. A16 remains partially verified; manual platform checks remain outstanding. See [implementation and validation](a15-a18-implementation.md).**
+
 ## Selection checklist
 
 - [x] **A01 — Separate backup history for each target file.** P1 · Effort L
@@ -26,10 +28,10 @@ Effort is relative implementation and validation scope, not a delivery estimate:
 - [ ] **A12 — Keep save, restore and DNS operations responsive.** P2 · Effort L
 - [ ] **A13 — Measure large-file performance before optimizing.** Investigation · Effort M
 - [ ] **A14 — Add a review of pending changes before saving.** Optional · Effort M
-- [ ] **A15 — Edit an existing mapping without deleting it.** Optional · Effort M
-- [ ] **A16 — Verify keyboard use, accessibility and display scaling.** Optional · Effort M
-- [ ] **A17 — Explain and manage retained browser-preview profiles.** Optional · Effort M
-- [ ] **A18 — Improve repeatable builds and release validation.** Optional · Effort L
+- [x] **A15 — Edit an existing mapping without deleting it.** Optional · Effort M
+- [x] **A16 — Verify keyboard use, accessibility and display scaling.** Optional · Effort M
+- [x] **A17 — Explain and manage retained browser-preview profiles.** Optional · Effort M
+- [x] **A18 — Improve repeatable builds and release validation.** Optional · Effort L
 
 **Suggested selection:** A01–A10 form the reliability backlog, not a single required batch. For a smaller initial batch, A02, A07 and A08 are comparatively contained; schedule A01 promptly because it affects recovery. Plan A11 now regardless of which product improvements you choose. A13 is a measurement task; optimization would be scoped from its results.
 

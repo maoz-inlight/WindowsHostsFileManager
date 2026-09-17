@@ -81,6 +81,7 @@ public partial class TrayMenu : Window
         // taking it - leaving the popup unactivated behind the taskbar flyout.
         SetForegroundWindow(handle);
         Activate();
+        MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
     }
 
     private const uint SwpNoSize = 0x0001;

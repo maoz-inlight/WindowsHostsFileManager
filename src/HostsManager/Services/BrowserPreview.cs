@@ -132,6 +132,38 @@ public sealed class BrowserPreviewSession : IDisposable
 public sealed class BrowserPreviewService : IDisposable
 {
     private BrowserPreviewSession? _active;
+    public static BrowserPreviewProfiles Profiles { get; } = new(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "HostsManager", "browser-preview"));
+
+    private static Mutex ProfileMutex() => new(false, "Local\\HostsManager.PreviewProfiles." +
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Profiles.Root.ToUpperInvariant()))));
+
+    public static void DeleteProfile(BrowserPreviewProfile profile)
+    {
+        using var mutex = ProfileMutex();
+        Acquire(mutex);
+        try
+        {
+            Profiles.Delete(profile, browser =>
+            {
+                var processes = Process.GetProcessesByName(browser == "edge" ? "msedge" : "chrome");
+                try { return processes.Length != 0; }
+                finally { foreach (var process in processes) process.Dispose(); }
+            });
+        }
+        finally { mutex.ReleaseMutex(); }
+    }
+
+    private static void Acquire(Mutex mutex)
+    {
+        try
+        {
+            if (!mutex.WaitOne(TimeSpan.FromSeconds(2)))
+                throw new IOException("Another preview operation is busy. Please retry.");
+        }
+        catch (AbandonedMutexException) { }
+    }
 
     public IReadOnlyList<ChromiumBrowser> FindInstalledBrowsers()
     {
@@ -171,6 +203,10 @@ public sealed class BrowserPreviewService : IDisposable
         IReadOnlyList<BrowserOverride> overrides, IReadOnlyList<Uri> startUris,
         string? additionalFlags = null)
     {
+        using var profileMutex = ProfileMutex();
+        Acquire(profileMutex);
+        try
+        {
         if (_active is { IsEnded: false })
             throw new InvalidOperationException(
                 "An isolated browser is already running. Close it before starting a different preview.");
@@ -193,9 +229,7 @@ public sealed class BrowserPreviewService : IDisposable
         var profileIdentity = flags.Count == 0 ? rules : rules + "\n" + string.Join("\n", flags);
         var profileKey = Convert.ToHexString(
             SHA256.HashData(Encoding.UTF8.GetBytes(profileIdentity)))[..12].ToLowerInvariant();
-        var profile = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HostsManager", "browser-preview", browser.Kind.ToString().ToLowerInvariant(), profileKey);
+        var profile = Path.Combine(Profiles.Root, browser.Kind.ToString().ToLowerInvariant(), profileKey);
         Directory.CreateDirectory(profile);
 
         var arguments = new List<string>
@@ -235,6 +269,8 @@ public sealed class BrowserPreviewService : IDisposable
         }
 
         return session;
+        }
+        finally { profileMutex.ReleaseMutex(); }
     }
 
     private static string? FindAppPath(string executable)

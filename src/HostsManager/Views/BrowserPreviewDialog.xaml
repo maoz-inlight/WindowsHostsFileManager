@@ -85,6 +85,9 @@
                 </Border>
 
                 <StackPanel Grid.Row="5" Margin="0,12,0,0">
+                    <TextBlock Text="Preview cookies and other browser data are retained and reused." TextWrapping="Wrap"/>
+                    <Button Content="Manage retained preview data…" Click="OnManageProfiles"
+                            HorizontalAlignment="Left" Margin="0,6,0,12" Style="{StaticResource ToolButton}"/>
                     <TextBlock Text="Browser options" FontWeight="SemiBold" Margin="0,0,0,8" />
                     <ItemsControl x:Name="FlagOptionsList">
                         <ItemsControl.ItemsPanel>

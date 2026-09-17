@@ -7,7 +7,7 @@ Built because hand-editing had already gone wrong: the hosts file on this machin
 paragraph of chat text pasted in by accident. Windows silently ignores lines it can't parse, so
 that kind of corruption stays invisible until something stops resolving.
 
-![Hosts manager showing sample entries, a duplicate-domain warning, an unparseable line flagged in red, and Docker- and Tailscale-owned rows marked read-only](docs/images/screenshot.png)
+![Hosts manager showing grouped sample entries, editing controls and protected Docker and Tailscale rows](docs/screenshot-review-light.png)
 
 *Shown with example data — none of the domains or IPs above are real.*
 
@@ -17,8 +17,12 @@ that kind of corruption stays invisible until something stops resolving.
   uncomments it. Nothing else on the line changes.
 - **Open a domain in an isolated Edge or Chrome window** where its mapping applies only
   to that browser. Windows DNS, the hosts file, and your normal browser stay untouched.
-- **Add and remove entries** with live validation — you see the exact line that will be written
-  before it is written.
+- **Add, edit and remove entries** with live validation. Select a row and press F2 to edit
+  its IP, hostnames or comment while preserving its group, position and enabled state.
+- **Manage retained preview data** from More actions → Browser preview data. Profiles are
+  reused for the same browser, mappings and flags; cookies, sign-ins, history and cache can
+  persist. Select a profile to delete after closing that browser's windows and background
+  processes. Normal browser profiles are not cleanup targets.
 - **Import or merge another hosts file.** Import replaces only editable entries while preserving
   local comments and tool-owned sections; merge adds new hostnames and skips duplicates. Both stay
   pending until you save.
@@ -121,18 +125,19 @@ build/HostsManager.exe --hosts-path C:\temp\hosts-copy --backups-dir C:\temp\bac
 ./installer/build.ps1
 ```
 
-Publishes every architecture and builds the installers into `dist`. Requires the WiX 5
-CLI (`dotnet tool install --global wix --version 5.0.2` plus
-`wix extension add -g WixToolset.UI.wixext/5.0.2` and
-`wix extension add -g WixToolset.Util.wixext/5.0.2`).
+Publishes every architecture and builds the installers into `dist`. Install the exact SDK
+in `global.json`; the script restores WiX 5.0.2 from the repository tool manifest and its
+extensions into `.wix`. No global WiX installation is needed. Dependency locks are checked
+and `SHA256SUMS.txt` is generated. See [build and release validation](docs/release-validation.md).
 
 .NET cannot emit one binary that runs on every CPU, so each architecture gets its own
 executable and installer.
 
 ### Releasing an update
 
-Bump `<Version>` in [Directory.Build.props](Directory.Build.props) and run the build
-script again — that's the whole release process. All three installers share one
+From a clean `master` checkout, run `./installer/release.ps1 -Version 1.0.15 -NotesFile notes.md`
+with the next unused version and reviewed release notes. The script tests, builds, tags,
+uploads a draft, verifies uploaded sizes and hashes, then publishes. All three installers share one
 `UpgradeCode`, so installing a build with a higher version over an existing install
 replaces it in place rather than adding a second entry in Programs and Features. To
 build a specific version without editing the file: `./installer/build.ps1 -Version 1.2.0`.

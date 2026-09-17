@@ -8,19 +8,19 @@
 
     <Window.Resources>
         <DataTemplate DataType="{x:Type views:TrayHeaderRow}">
-            <Button Style="{StaticResource TrayRowButton}" Click="OnHeaderClick">
+            <Button Style="{StaticResource TrayRowButton}" Click="OnHeaderClick" AutomationProperties.Name="{Binding Label}">
                 <TextBlock Text="{Binding Label}" FontWeight="SemiBold" FontSize="13" />
             </Button>
         </DataTemplate>
 
         <DataTemplate DataType="{x:Type views:TrayActionRow}">
-            <Button Style="{StaticResource TrayRowButton}" Click="OnActionClick">
+            <Button Style="{StaticResource TrayRowButton}" Click="OnActionClick" AutomationProperties.Name="{Binding Label}">
                 <TextBlock Text="{Binding Label}" FontSize="12.5" />
             </Button>
         </DataTemplate>
 
         <DataTemplate DataType="{x:Type views:TrayToggleRow}">
-            <Button Style="{StaticResource TrayRowButton}" Click="OnToggleClick" ToolTip="{Binding Tooltip}">
+            <Button Style="{StaticResource TrayRowButton}" Click="OnToggleClick" ToolTip="{Binding Tooltip}" AutomationProperties.Name="{Binding Label}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -29,7 +29,7 @@
                     <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="12.5" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
                     <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsOn}"
-                              IsHitTestVisible="False" />
+                              IsHitTestVisible="False" Focusable="False" />
                 </Grid>
             </Button>
         </DataTemplate>

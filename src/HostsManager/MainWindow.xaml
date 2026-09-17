@@ -16,7 +16,7 @@
         <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding AddCommand}" />
         <KeyBinding Key="R" Modifiers="Ctrl" Command="{Binding ReloadCommand}" />
         <KeyBinding Key="O" Modifiers="Ctrl+Shift" Command="{Binding OpenIsolatedBrowserCommand}" />
-        <KeyBinding Key="Delete" Command="{Binding DeleteCommand}" />
+        <KeyBinding Key="F" Modifiers="Ctrl" Command="{x:Static ApplicationCommands.Find}" />
     </Window.InputBindings>
 
     <Grid>
@@ -49,7 +49,7 @@
                              VerticalAlignment="Center"
                              Visibility="{Binding IsDirty, Converter={StaticResource BoolToVis}}" />
                     <Button Style="{StaticResource IconButton}" Margin="10,0,0,0" Click="OnAbout"
-                            ToolTip="About Hosts manager">
+                            ToolTip="About Hosts manager" AutomationProperties.Name="About Hosts manager">
                         <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
                     </Button>
                 </StackPanel>
@@ -71,6 +71,7 @@
                 -->
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Add" Style="{StaticResource ToolButton}" Command="{Binding AddCommand}" />
+                    <Button Content="Edit" Style="{StaticResource ToolButton}" Command="{Binding EditCommand}" ToolTip="Edit selected entry (F2)" />
                     <Button Content="Delete" Style="{StaticResource ToolButton}" Command="{Binding DeleteCommand}" />
                     <Button Content="Groups" Style="{StaticResource ToolButton}" Command="{Binding GroupsCommand}"
                             ToolTip="Assign selected entries or enable and disable groups together" />
@@ -82,12 +83,14 @@
                             Padding="16,6" Margin="4,0,0,0" />
                     <Border Width="1" Background="{DynamicResource Border0}" Margin="8,2" />
                     <Button x:Name="MoreButton" Style="{StaticResource IconButton}" Click="OnMore"
-                            ToolTip="More actions">
+                            ToolTip="More actions" AutomationProperties.Name="More actions">
                         <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
                         <Button.ContextMenu>
                             <ContextMenu Style="{StaticResource OverflowMenu}">
                                 <MenuItem Header="Backups…" Style="{StaticResource OverflowMenuItem}"
                                           Command="{Binding BackupsCommand}" />
+                                <MenuItem Header="Browser preview data…" Style="{StaticResource OverflowMenuItem}"
+                                          Click="OnBrowserProfiles" />
                                 <Separator Style="{StaticResource OverflowSeparator}" />
                                 <MenuItem Header="Import entries…" Style="{StaticResource OverflowMenuItem}"
                                           Command="{Binding ImportCommand}"
@@ -153,7 +156,7 @@
                 </Grid.ColumnDefinitions>
 
                 <Grid Grid.Column="0">
-                    <TextBox x:Name="SearchBox" Style="{StaticResource FlatTextBox}" Padding="31,0,9,0"
+                    <TextBox x:Name="SearchBox" AutomationProperties.Name="Search entries" Style="{StaticResource FlatTextBox}" Padding="31,0,9,0"
                              Text="{Binding Search, UpdateSourceTrigger=PropertyChanged, Delay=120}"
                              ToolTip="Filter by domain, IP address, comment, source, group, or status" />
                     <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="13"
@@ -177,12 +180,14 @@
                 </Grid>
 
                 <ComboBox Grid.Column="1" Width="160" Margin="8,0,0,0"
+                          AutomationProperties.Name="Filter by group"
                           Style="{StaticResource FlatComboBox}"
                           ItemContainerStyle="{StaticResource FlatComboBoxItem}"
                           ItemsSource="{Binding GroupOptions}"
                           SelectedItem="{Binding SelectedGroup, Mode=TwoWay}" />
 
                 <ComboBox Grid.Column="2" x:Name="FilterBox" Width="150" Margin="8,0,0,0"
+                          AutomationProperties.Name="Filter by status"
                           Style="{StaticResource FlatComboBox}"
                           ItemContainerStyle="{StaticResource FlatComboBoxItem}"
                           SelectedIndex="0" SelectionChanged="OnFilterChanged">
@@ -195,6 +200,7 @@
 
         <!-- Entries -->
         <DataGrid Grid.Row="6" x:Name="EntryGrid" ItemsSource="{Binding EntriesView}"
+                  AutomationProperties.Name="Hosts entries"
                   SelectedItem="{Binding SelectedEntry}"
                   SelectionChanged="OnEntrySelectionChanged"
                   PreviewMouseRightButtonDown="OnEntryGridPreviewMouseRightButtonDown"
@@ -206,10 +212,16 @@
                   Background="{DynamicResource Surface2}" BorderThickness="0" RowHeight="34"
                   ColumnHeaderStyle="{StaticResource GridColumnHeader}" CellStyle="{StaticResource GridCell}"
                   SelectionMode="Extended" IsReadOnly="True"
-                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
+
+            <DataGrid.InputBindings>
+                <KeyBinding Key="F2" Command="{Binding EditCommand}" />
+                <KeyBinding Key="Delete" Command="{Binding DeleteCommand}" />
+            </DataGrid.InputBindings>
 
             <DataGrid.ContextMenu>
                 <ContextMenu Style="{StaticResource OverflowMenu}">
+                    <MenuItem Header="Edit entry…" Command="{Binding EditCommand}" Style="{StaticResource OverflowMenuItem}" />
                     <MenuItem Header="{Binding OpenIsolatedBrowserText}"
                               Style="{StaticResource OverflowMenuItem}"
                               Command="{Binding OpenIsolatedBrowserCommand}" />
@@ -239,6 +251,7 @@
                         <DataTemplate>
                             <Grid Margin="14,0,0,0" HorizontalAlignment="Left">
                                 <CheckBox Style="{StaticResource ToggleSwitch}"
+                                          AutomationProperties.Name="{Binding Domain, StringFormat=Enable {0}}"
                                           IsChecked="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                           HorizontalAlignment="Left"
                                           Visibility="{Binding CanToggle, Converter={StaticResource BoolToVis}}" />
@@ -252,7 +265,7 @@
                                     the one click the row's own warning icon promises.
                                 -->
                                 <Button Style="{StaticResource IconButton}" Width="24" Height="24" Padding="0"
-                                        ToolTip="Delete this line"
+                                        ToolTip="Delete this line" AutomationProperties.Name="Delete invalid line"
                                         Command="{Binding DataContext.DeleteRowCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                         CommandParameter="{Binding}"
                                         Visibility="{Binding IsUnparseable, Converter={StaticResource BoolToVis}}">
@@ -264,7 +277,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Domain" Width="*" SortMemberPath="Domain">
+                <DataGridTemplateColumn Header="Domain" Width="*" MinWidth="150" SortMemberPath="Domain">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding Domain}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">

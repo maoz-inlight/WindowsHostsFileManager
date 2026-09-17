@@ -22,9 +22,10 @@
 #>
 [CmdletBinding()]
 param(
-    [string[]]$Architectures = @('x64', 'x86', 'arm64'),
+    [ValidateSet('x64', 'x86', 'arm64')][string[]]$Architectures = @('x64', 'x86', 'arm64'),
     [string]$Configuration = 'Release',
-    [string]$Version
+    [string]$Version,
+    [switch]$UpdateDependencies
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,6 +53,15 @@ Write-Host "Version: $Version" -ForegroundColor Cyan
 
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
+Push-Location $repoRoot
+try {
+dotnet tool restore
+if ($LASTEXITCODE -ne 0) { throw 'Local WiX tool restore failed.' }
+foreach ($extension in @('WixToolset.UI.wixext', 'WixToolset.Util.wixext')) {
+    dotnet tool run wix -- extension add "$extension/5.0.2"
+    if ($LASTEXITCODE -ne 0) { throw "WiX extension restore failed: $extension" }
+}
+
 foreach ($arch in $Architectures) {
     $rid = "win-$arch"
     $publishDir = Join-Path $repoRoot "publish\$rid"
@@ -76,6 +86,7 @@ foreach ($arch in $Architectures) {
         -p:EnableCompressionInSingleFile=true `
         -p:DebugType=none `
         -p:Version=$Version `
+        -p:RestoreLockedMode=$(-not $UpdateDependencies) `
         --output $publishDir `
         --nologo --verbosity quiet
     if ($LASTEXITCODE -ne 0) { throw "publish failed for $rid" }
@@ -90,12 +101,12 @@ foreach ($arch in $Architectures) {
     # -pdbtype none keeps dist to shippable files only. Version is passed explicitly
     # rather than bound from the exe's own file version, so the MSI's ProductVersion is
     # guaranteed to be exactly what was requested, not whatever the SDK derived.
-    wix build (Join-Path $PSScriptRoot 'Package.wxs') `
+    dotnet tool run wix -- build (Join-Path $PSScriptRoot 'Package.wxs') `
         -arch $arch `
         -define "SourceDir=$publishDir" `
         -define "Version=$Version" `
-        -ext WixToolset.UI.wixext `
-        -ext WixToolset.Util.wixext `
+        -ext (Join-Path $repoRoot '.wix/extensions/WixToolset.UI.wixext/5.0.2/wixext5/WixToolset.UI.wixext.dll') `
+        -ext (Join-Path $repoRoot '.wix/extensions/WixToolset.Util.wixext/5.0.2/wixext5/WixToolset.Util.wixext.dll') `
         -pdbtype none `
         -out $msi
     if ($LASTEXITCODE -ne 0) { throw "wix build failed for $arch" }
@@ -104,6 +115,11 @@ foreach ($arch in $Architectures) {
     Copy-Item (Join-Path $publishDir 'HostsManager.exe') `
         (Join-Path $outputRoot "HostsManager-$Version-$arch-Portable.exe") -Force
 }
+
+& (Join-Path $PSScriptRoot 'Write-Checksums.ps1') -Version $Version -Architectures $Architectures
+& (Join-Path $PSScriptRoot 'Verify-Checksums.ps1')
+}
+finally { Pop-Location }
 
 Write-Host "`n=== dist ===" -ForegroundColor Cyan
 Get-ChildItem $outputRoot | Sort-Object Name |

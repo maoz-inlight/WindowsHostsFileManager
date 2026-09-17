@@ -11,6 +11,12 @@ namespace HostsManager;
 
 public partial class MainWindow : Window
 {
+    private void OnBrowserProfiles(object sender, RoutedEventArgs e)
+    {
+        var dialog = new BrowserProfilesDialog { Owner = this };
+        ThemeManager.Track(dialog);
+        dialog.ShowDialog();
+    }
     private readonly MainViewModel _vm;
     private readonly BrowserPreviewService _browserPreview = new();
     private BrowserPreviewSession? _browserSession;
@@ -26,10 +32,18 @@ public partial class MainWindow : Window
 
         _vm = vm;
         DataContext = vm;
+        CommandBindings.Add(new CommandBinding(ApplicationCommands.Find,
+            (_, _) => SearchBox.Focus()));
 
         ThemeManager.Track(this);
 
         vm.RequestAddEntry = ShowAddEntryDialog;
+        vm.RequestEditEntry = entry =>
+        {
+            var dialog = new AddEntryDialog(entry.Line) { Owner = this };
+            ThemeManager.Track(dialog);
+            return dialog.ShowDialog() == true ? dialog.Result : null;
+        };
         vm.RequestHostsFile = ChooseHostsFile;
         vm.ShowBackups = ShowBackupsDialog;
         vm.ShowGroups = ShowGroupsDialog;

@@ -101,6 +101,13 @@ public partial class BrowserPreviewDialog : Window
 
     private void OnInputChanged(object sender, EventArgs e) => Validate();
 
+    private void OnManageProfiles(object sender, RoutedEventArgs e)
+    {
+        var dialog = new BrowserProfilesDialog { Owner = this };
+        ThemeManager.Track(dialog);
+        dialog.ShowDialog();
+    }
+
     private void OnStartPageChanged(object sender, RoutedEventArgs e) => Validate();
 
     private void Validate()

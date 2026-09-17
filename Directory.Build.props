@@ -10,6 +10,8 @@
       when deciding whether a version is an upgrade.
     -->
     <Version>1.0.14</Version>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetLockFilePath Condition="'$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).lock.json</NuGetLockFilePath>
 
     <!--
       Without this, the SDK appends "+<git-commit-sha>" to the exe's ProductVersion

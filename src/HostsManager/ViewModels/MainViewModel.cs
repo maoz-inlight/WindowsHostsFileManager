@@ -45,6 +45,7 @@ public sealed class MainViewModel : Observable, IDisposable
         EntriesView.Filter = o => Matches((EntryViewModel)o);
 
         AddCommand = new RelayCommand(Add);
+        EditCommand = new RelayCommand(Edit, () => SelectedEntry is { CanToggle: true });
         DeleteCommand = new RelayCommand(Delete, () => SelectedEntry is { IsReadOnly: false });
         ReloadCommand = new RelayCommand(ReloadWithConfirmation);
         SaveCommand = new RelayCommand(Save, () => IsDirty);
@@ -66,6 +67,7 @@ public sealed class MainViewModel : Observable, IDisposable
     // ---- host-supplied dialogs -------------------------------------------
 
     public Func<AddEntryRequest?>? RequestAddEntry { get; set; }
+    public Func<EntryViewModel, AddEntryRequest?>? RequestEditEntry { get; set; }
     public Func<string, string?>? RequestHostsFile { get; set; }
     public Action? ShowBackups { get; set; }
     public Action? ShowGroups { get; set; }
@@ -83,6 +85,7 @@ public sealed class MainViewModel : Observable, IDisposable
     public HostsFileWriter Writer => _writer;
 
     public RelayCommand AddCommand { get; }
+    public RelayCommand EditCommand { get; }
     public RelayCommand DeleteCommand { get; }
     public RelayCommand ReloadCommand { get; }
     public RelayCommand SaveCommand { get; }
@@ -423,6 +426,24 @@ public sealed class MainViewModel : Observable, IDisposable
         }
     }
 
+    private void Edit()
+    {
+        var entry = SelectedEntry;
+        var doc = _writer.Document;
+        if (entry is not { CanToggle: true } || doc is null) return;
+        var request = RequestEditEntry?.Invoke(entry);
+        if (request is null) return;
+        try
+        {
+            doc.EditEntry(entry.Line, request.Ip, request.Hostnames, request.Comment);
+            OnDocumentChanged();
+        }
+        catch (ArgumentException ex)
+        {
+            ShowError?.Invoke("Could not edit that entry", ex.Message);
+        }
+    }
+
     private void Delete() => DeleteEntry(SelectedEntry);
 
     private void DeleteEntry(EntryViewModel? entry)
@@ -494,7 +515,12 @@ public sealed class MainViewModel : Observable, IDisposable
 
     private void OnDocumentChanged()
     {
-        foreach (var entry in Entries) entry.Refresh();
+        var shadowed = _writer.Document?.FindShadowedEntries().ToHashSet() ?? new HashSet<HostsLine>();
+        foreach (var entry in Entries)
+        {
+            entry.IsShadowed = shadowed.Contains(entry.Line);
+            entry.Refresh();
+        }
         RefreshGroupOptions();
         RaiseAll();
         EntriesView.Refresh();

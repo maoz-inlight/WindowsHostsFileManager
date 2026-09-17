@@ -96,6 +96,11 @@ public sealed class EntryViewModel : Observable
 
     public void Refresh()
     {
+        Raise(nameof(Domain));
+        Raise(nameof(MapsTo));
+        Raise(nameof(MapsToSortKey));
+        Raise(nameof(Comment));
+        Raise(nameof(IsShadowed));
         Raise(nameof(IsEnabled));
         Raise(nameof(Group));
         Raise(nameof(GroupName));
