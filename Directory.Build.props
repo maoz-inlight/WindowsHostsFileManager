@@ -1,4 +1,4 @@
-﻿<Project>
+<Project>
 
   <PropertyGroup>
     <!--
@@ -9,7 +9,7 @@
       parts (Major.Minor.Build): Windows Installer ignores a fourth field
       when deciding whether a version is an upgrade.
     -->
-    <Version>1.0.15</Version>
+    <Version>1.0.16</Version>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <NuGetLockFilePath Condition="'$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).lock.json</NuGetLockFilePath>
 
