@@ -32,6 +32,8 @@ public partial class BrowserPreviewDialog : Window
     private readonly IReadOnlyList<BrowserOverride> _overrides;
     private readonly IReadOnlyList<BrowserStartPageOption> _startPages;
     private bool _initializing = true;
+    private bool _appearanceLoaded;
+    public BrowserPreviewAppearance Appearance => AppearancePicker.Appearance;
     private readonly BrowserFlagOption[] _flagOptions =
     {
         new("Ignore certificate errors", "Open HTTPS sites with invalid or self-signed certificates.",
@@ -66,7 +68,8 @@ public partial class BrowserPreviewDialog : Window
             ? "Open in an isolated browser"
             : $"Open {lines.Count} entries in an isolated browser";
         BrowserBox.ItemsSource = browsers;
-        BrowserBox.SelectedIndex = 0;
+        BrowserBox.SelectedItem = browsers.FirstOrDefault(browser =>
+            browser.Kind == BrowserPreviewPreferences.LastSelected) ?? browsers.FirstOrDefault();
         StartPagesList.ItemsSource = _startPages;
         var savedFlags = BrowserPreviewFlags.Parse(additionalFlags).ToList();
         foreach (var option in _flagOptions)
@@ -81,6 +84,7 @@ public partial class BrowserPreviewDialog : Window
             _overrides.Select(o => $"{o.Hostname}  →  {o.Target}"));
 
         _initializing = false;
+        AppearancePicker.Changed += (_, _) => Validate();
         Validate();
     }
 
@@ -99,7 +103,12 @@ public partial class BrowserPreviewDialog : Window
         .Select(page => new Uri(page.UrlText.Trim(), UriKind.Absolute))
         .ToArray();
 
-    private void OnInputChanged(object sender, EventArgs e) => Validate();
+    private void OnInputChanged(object sender, EventArgs e)
+    {
+        if (!_initializing && BrowserBox.SelectedItem is ChromiumBrowser browser)
+            BrowserPreviewPreferences.Remember(browser.Kind);
+        Validate();
+    }
 
     private void OnManageProfiles(object sender, RoutedEventArgs e)
     {
@@ -126,7 +135,17 @@ public partial class BrowserPreviewDialog : Window
 
         if (error is null)
         {
-            try { BrowserPreviewFlags.Parse(AdditionalFlags); }
+            try
+            {
+                BrowserPreviewFlags.Parse(AdditionalFlags);
+                if (!_appearanceLoaded)
+                {
+                    var profile = BrowserPreviewService.GetProfile(SelectedBrowser, _overrides, AdditionalFlags);
+                    _appearanceLoaded = true;
+                    AppearancePicker.LoadAppearance(profile.Metadata);
+                }
+                _ = Appearance;
+            }
             catch (ArgumentException ex) { error = ex.Message; }
         }
 
@@ -139,6 +158,7 @@ public partial class BrowserPreviewDialog : Window
         Validate();
         if (!OpenButton.IsEnabled) return;
 
+        BrowserPreviewPreferences.Remember(SelectedBrowser.Kind);
         DialogResult = true;
     }
 }

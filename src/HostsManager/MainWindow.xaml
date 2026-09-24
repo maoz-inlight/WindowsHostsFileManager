@@ -139,9 +139,16 @@
                 BorderThickness="0,0,0,1" Padding="16,10"
                 Visibility="{Binding IsBrowserPreviewActive, Converter={StaticResource BoolToVis}}">
             <Grid>
-                <TextBlock Text="{Binding BrowserPreviewText}" FontSize="12.5"
-                           Foreground="{DynamicResource Success}" VerticalAlignment="Center" />
-                <Button Content="Close preview" Style="{StaticResource LinkButton}" HorizontalAlignment="Right"
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Ellipse Width="18" Height="18" Fill="{Binding BrowserPreviewColor}" Stroke="{DynamicResource TextSecondary}"
+                         StrokeThickness="1" Margin="0,0,10,0" ToolTip="{Binding BrowserPreviewColorLabel}"
+                         AutomationProperties.Name="{Binding BrowserPreviewColorLabel}"/>
+                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                    <TextBlock Text="{Binding BrowserPreviewText}" FontSize="12.5" TextWrapping="Wrap"
+                               Foreground="{DynamicResource Success}"/>
+                    <TextBlock Text="{Binding BrowserPreviewColorLabel}" FontSize="12" Foreground="{DynamicResource TextSecondary}"/>
+                </StackPanel>
+                <Button Grid.Column="2" Content="Close preview" Style="{StaticResource LinkButton}" HorizontalAlignment="Right"
                         Foreground="{DynamicResource Success}" Command="{Binding EndBrowserPreviewCommand}" />
             </Grid>
         </Border>

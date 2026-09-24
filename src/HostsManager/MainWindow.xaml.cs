@@ -79,10 +79,10 @@ public partial class MainWindow : Window
             if (dialog.ShowDialog() != true) return;
 
             var session = _browserPreview.Launch(
-                dialog.SelectedBrowser, dialog.Overrides, dialog.SelectedStartUris, dialog.AdditionalFlags);
+                dialog.SelectedBrowser, dialog.Overrides, dialog.SelectedStartUris, dialog.AdditionalFlags, dialog.Appearance);
             _browserFlags = dialog.AdditionalFlags;
             _browserSession = session;
-            _vm.SetBrowserPreview(session.Description);
+            _vm.SetBrowserPreview(session.Description, session.Color);
 
             session.Ended += () => Dispatcher.InvokeAsync(() =>
             {

@@ -6,14 +6,17 @@ namespace HostsManager.Core;
 public sealed record BrowserPreviewProfile(string Browser, string Key, string Path,
     BrowserPreviewProfileMetadata? Metadata = null)
 {
-    public string DisplayName => Metadata is { Mappings.Length: > 0 }
+    public string ColorSwatch => Metadata?.Color ?? "#808080";
+    public string DisplayName => (Metadata?.Name is { Length: > 0 } name ? name + " · " : "") + MappingDescription;
+    private string MappingDescription => Metadata is { Mappings.Length: > 0 }
         ? $"{Browser} — {string.Join(", ", Metadata.Mappings.Take(3))}" +
           (Metadata.Mappings.Length > 3 ? $" (+{Metadata.Mappings.Length - 3} more)" : "") +
           $" · last launched {Metadata.LastLaunchedUtc.ToLocalTime():g}"
         : $"{Browser} — {Key} · mappings unknown (older profile)";
 }
 
-public sealed record BrowserPreviewProfileMetadata(string[] Mappings, string[] Flags, DateTime LastLaunchedUtc);
+public sealed record BrowserPreviewProfileMetadata(string[] Mappings, string[] Flags, DateTime LastLaunchedUtc,
+    string? Name = null, string? Color = null, int ThemeVersion = 0);
 
 /// <summary>Only the two app-owned browser directories and twelve-digit profile keys are eligible.</summary>
 public sealed class BrowserPreviewProfiles(string root)
@@ -48,19 +51,66 @@ public sealed class BrowserPreviewProfiles(string root)
         // Check the whole tree before deleting anything; never follow a junction or symlink.
         CheckTree(expected);
         if (browserIsRunning(profile.Browser))
-            throw new InvalidOperationException($"Close all {profile.Browser} windows and background processes, then retry. No profile was deleted.");
+            throw new InvalidOperationException("This preview profile is still running. Close its windows, or use Close background preview, then retry. No profile was deleted.");
         Directory.Delete(expected, recursive: true);
     }
 
     public void RecordLaunch(BrowserPreviewProfile profile, IEnumerable<string> mappings, IEnumerable<string> flags)
     {
         var path = ValidatePath(profile);
-        var metadata = new BrowserPreviewProfileMetadata(mappings.ToArray(), flags.ToArray(), DateTime.UtcNow);
+        var old = ReadMetadata(path);
+        var metadata = new BrowserPreviewProfileMetadata(mappings.ToArray(), flags.ToArray(), DateTime.UtcNow,
+            old?.Name, old?.Color, old?.ThemeVersion ?? 0);
+        WriteMetadata(path, metadata);
+    }
+
+    public BrowserPreviewProfile Get(string browser, string key)
+    {
+        var profile = new BrowserPreviewProfile(browser, key, Path.Combine(Root, browser, key));
+        if (!Directory.Exists(profile.Path)) return profile;
+        ValidatePath(profile);
+        return profile with { Metadata = ReadMetadata(profile.Path) };
+    }
+
+    public void SaveAppearance(BrowserPreviewProfile profile, BrowserPreviewAppearance appearance,
+        Func<string, bool> browserIsRunning)
+    {
+        appearance = appearance.Normalize();
+        var path = ValidatePath(profile);
+        var old = ReadMetadata(path);
+        var themeVersion = BrowserPreviewAppearance.ThemeVersionFor(profile.Browser);
+        if (appearance.Color != old?.Color || (appearance.Color is not null && old?.ThemeVersion != themeVersion))
+        {
+            var preferencesDirectory = Path.Combine(path, "Default");
+            var preferences = Path.Combine(preferencesDirectory, "Preferences");
+            if (Directory.Exists(preferencesDirectory))
+            {
+                CheckParents(preferencesDirectory);
+                if (browserIsRunning(profile.Browser))
+                    throw new InvalidOperationException("This preview profile is still running, possibly in the background. Close its windows, or select it in Browser preview data and choose Close background preview, then retry the color change.");
+            }
+            if (File.Exists(preferences) && (File.GetAttributes(preferences) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Browser preferences must not be a linked file.");
+            var json = File.Exists(preferences) ? File.ReadAllText(preferences) : "{}";
+            var updated = appearance.UpdatePreferences(json, profile.Browser);
+            Directory.CreateDirectory(preferencesDirectory);
+            WriteAtomic(preferences, updated);
+        }
+        WriteMetadata(path, new(old?.Mappings ?? [], old?.Flags ?? [], old?.LastLaunchedUtc ?? default,
+            appearance.Name, appearance.Color, themeVersion));
+    }
+
+    private static void WriteMetadata(string path, BrowserPreviewProfileMetadata metadata) =>
+        WriteAtomic(Path.Combine(path, MetadataFile), JsonSerializer.Serialize(metadata));
+
+    private static void WriteAtomic(string destination, string content)
+    {
+        var path = Path.GetDirectoryName(destination)!;
         var temporary = Path.Combine(path, $".preview-{Guid.NewGuid():N}.tmp");
         try
         {
-            File.WriteAllText(temporary, JsonSerializer.Serialize(metadata));
-            File.Move(temporary, Path.Combine(path, MetadataFile), overwrite: true);
+            File.WriteAllText(temporary, content);
+            File.Move(temporary, destination, overwrite: true);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
@@ -72,10 +122,11 @@ public sealed class BrowserPreviewProfiles(string root)
         var details = new List<string>
         {
             $"Browser: {profile.Browser}    Profile: {profile.Key}",
+            $"Name: {metadata?.Name ?? "Not named"}    Color: {metadata?.Color ?? "Browser default"}",
             $"Folder created: {Directory.GetCreationTime(path):g}",
-            metadata is null ? "Last launch: unknown (no saved preview details)"
+            metadata is null || metadata.LastLaunchedUtc == default ? "Last launch: unknown (no saved preview details)"
                 : $"Last launched: {metadata.LastLaunchedUtc.ToLocalTime():g}",
-            metadata is null ? "Mappings: unknown; details will be recorded when this profile is reused."
+            metadata is null || metadata.Mappings.Length == 0 ? "Mappings: unknown; details will be recorded when this profile is reused."
                 : "Mappings:\n" + string.Join("\n", metadata.Mappings),
             metadata is null ? "Browser options: unknown"
                 : "Browser options: " + (metadata.Flags.Length == 0 ? "Default" : string.Join("\n", metadata.Flags)),
@@ -110,12 +161,14 @@ public sealed class BrowserPreviewProfiles(string root)
             var file = new FileInfo(Path.Combine(path, MetadataFile));
             if (!file.Exists || file.Length > 65536 || (file.Attributes & FileAttributes.ReparsePoint) != 0) return null;
             var value = JsonSerializer.Deserialize<BrowserPreviewProfileMetadata>(File.ReadAllText(file.FullName));
-            return value is { Mappings: not null, Flags: not null } && value.LastLaunchedUtc != default
-                ? value : null;
+            if (value is not { Mappings: not null, Flags: not null }) return null;
+            var appearance = new BrowserPreviewAppearance(value.Name, value.Color).Normalize();
+            return value with { Name = appearance.Name, Color = appearance.Color };
         }
         catch (IOException) { return null; }
         catch (UnauthorizedAccessException) { return null; }
         catch (JsonException) { return null; }
+        catch (ArgumentException) { return null; }
     }
 
     private static long Measure(string path)

@@ -1,0 +1,27 @@
+<UserControl x:Class="HostsManager.Views.PreviewAppearancePicker"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Text="Profile name (optional)" Margin="0,0,0,4"/>
+        <TextBox x:Name="NameBox" MaxLength="80" Style="{StaticResource FlatTextBox}"
+                 AutomationProperties.Name="Preview profile name" TextChanged="OnChanged"/>
+        <TextBlock Text="Browser color" Margin="0,10,0,4"/>
+        <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="110"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <ComboBox x:Name="PaletteBox" Style="{StaticResource FlatComboBox}" SelectionChanged="OnPaletteChanged"
+                      AutomationProperties.Name="Browser color palette">
+                <ComboBox.ItemTemplate><DataTemplate>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="14" Height="14" Fill="{Binding Swatch}" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding Name}"/>
+                    </StackPanel>
+                </DataTemplate></ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBox Grid.Column="1" x:Name="HexBox" Margin="8,0" MaxLength="7" Style="{StaticResource FlatTextBox}"
+                     AutomationProperties.Name="Custom browser color in hex" TextChanged="OnChanged"/>
+            <Button Grid.Column="2" Content="Custom…" Click="OnCustom" Style="{StaticResource ToolButton}"/>
+        </Grid>
+        <TextBlock Text="Saved per preview profile. The browser creates light/dark shades from this color; private windows may ignore it. Close this preview before recoloring. Other browser profiles can stay open."
+                   TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0" Foreground="{DynamicResource TextSecondary}"/>
+    </StackPanel>
+</UserControl>

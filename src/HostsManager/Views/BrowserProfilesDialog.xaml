@@ -9,7 +9,7 @@
             <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <TextBlock TextWrapping="Wrap" Text="Previews reuse a profile for the same browser, mappings and flags. Cookies, sign-ins, history and cache can remain after closing a preview. Delete a selected profile to reset that data. Close all windows and background processes for that browser first. Normal browser profiles are unaffected."/>
+        <TextBlock TextWrapping="Wrap" Text="Previews reuse a profile for the same browser, mappings and flags. Cookies, sign-ins, history and cache can remain after closing a preview. Close this profile's windows before deleting or recoloring it. Use Close background preview if it is still running without windows. Other browser profiles are unaffected."/>
         <TextBox Grid.Row="1" x:Name="RootBox" IsReadOnly="True" Margin="0,12" TextWrapping="Wrap"
                  Style="{StaticResource FlatTextBox}" AutomationProperties.Name="Preview storage folder"/>
         <ListBox Grid.Row="2" x:Name="ProfilesList"
@@ -17,17 +17,25 @@
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  AutomationProperties.Name="Retained preview profiles" SelectionChanged="OnSelectionChanged">
             <ListBox.ItemTemplate><DataTemplate>
-                <TextBlock Text="{Binding DisplayName}" TextWrapping="Wrap" Margin="2,4"/>
+                <Grid Margin="2,4">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Ellipse Width="14" Height="14" Fill="{Binding ColorSwatch}" Margin="0,0,8,0"/>
+                    <TextBlock Grid.Column="1" Text="{Binding DisplayName}" TextWrapping="Wrap"/>
+                </Grid>
             </DataTemplate></ListBox.ItemTemplate>
         </ListBox>
         <TextBox Grid.Row="3" x:Name="SelectedPath" IsReadOnly="True" TextWrapping="Wrap" Margin="0,8"
                  Height="190" VerticalScrollBarVisibility="Auto"
                  Style="{StaticResource FlatTextBox}" AutomationProperties.Name="Selected profile details"/>
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+        <WrapPanel Grid.Row="4" HorizontalAlignment="Right">
             <Button Content="Refresh" Click="OnRefresh" Style="{StaticResource ToolButton}"/>
+            <Button x:Name="CloseBackgroundButton" Content="Close background preview" Click="OnCloseBackground" IsEnabled="False"
+                    Margin="8,0,0,0" Style="{StaticResource ToolButton}"/>
+            <Button x:Name="AppearanceButton" Content="Name &amp; color…" Click="OnAppearance" IsEnabled="False"
+                    Margin="8,0,0,0" Style="{StaticResource ToolButton}"/>
             <Button x:Name="DeleteButton" Content="Delete selected…" Click="OnDelete" IsEnabled="False"
                     Margin="8,0" Style="{StaticResource ToolButton}"/>
             <Button Content="Close" IsCancel="True" Style="{StaticResource ToolButton}"/>
-        </StackPanel>
+        </WrapPanel>
     </Grid>
 </Window>

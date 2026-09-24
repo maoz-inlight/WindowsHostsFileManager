@@ -142,6 +142,18 @@ public sealed class MainViewModel : Observable, IDisposable
     }
 
     private string _browserPreviewText = "";
+    private string _browserPreviewColor = "#808080";
+    public string BrowserPreviewColor
+    {
+        get => _browserPreviewColor;
+        private set => Set(ref _browserPreviewColor, value);
+    }
+    private string _browserPreviewColorLabel = "Browser default";
+    public string BrowserPreviewColorLabel
+    {
+        get => _browserPreviewColorLabel;
+        private set => Set(ref _browserPreviewColorLabel, value);
+    }
     public string BrowserPreviewText
     {
         get => _browserPreviewText;
@@ -243,8 +255,11 @@ public sealed class MainViewModel : Observable, IDisposable
             RequestOpenIsolatedBrowser?.Invoke(SelectedEntries);
     }
 
-    public void SetBrowserPreview(string description)
+    public void SetBrowserPreview(string description, string? color = null)
     {
+        var appearance = new BrowserPreviewAppearance(null, color).Normalize();
+        BrowserPreviewColor = appearance.Color ?? "#808080";
+        BrowserPreviewColorLabel = appearance.ColorLabel;
         BrowserPreviewText = $"Isolated browser active · {description}";
         IsBrowserPreviewActive = true;
         System.Windows.Input.CommandManager.InvalidateRequerySuggested();
@@ -254,6 +269,8 @@ public sealed class MainViewModel : Observable, IDisposable
     {
         IsBrowserPreviewActive = false;
         BrowserPreviewText = "";
+        BrowserPreviewColor = "#808080";
+        BrowserPreviewColorLabel = "Browser default";
         System.Windows.Input.CommandManager.InvalidateRequerySuggested();
     }
 

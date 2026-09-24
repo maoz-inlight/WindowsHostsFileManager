@@ -25,6 +25,7 @@
     <ProjectReference Include="..\HostsManager.TestHost\HostsManager.TestHost.csproj" ReferenceOutputAssembly="false" />
     <Compile Include="../../src/HostsManager/Services/ElevatedHostsFileCommitter.cs" Link="Services/ElevatedHostsFileCommitter.cs" />
     <Compile Include="../../src/HostsManager/Services/ProcessPrivileges.cs" Link="Services/ProcessPrivileges.cs" />
+    <Compile Include="../../src/HostsManager/Services/BrowserProfileProcesses.cs" Link="Services/BrowserProfileProcesses.cs" />
   </ItemGroup>
 
   <ItemGroup>

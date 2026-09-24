@@ -22,11 +22,12 @@ public sealed class BrowserPreviewSession : IDisposable
     private int _ended;
     private int _disposed;
 
-    internal BrowserPreviewSession(Process process, ChromiumBrowser browser, string description)
+    internal BrowserPreviewSession(Process process, ChromiumBrowser browser, string description, string? color)
     {
         _process = process;
         Browser = browser;
         Description = description;
+        Color = color;
 
         _windowMonitor = new System.Threading.Timer(
             CheckWindow, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
@@ -41,6 +42,7 @@ public sealed class BrowserPreviewSession : IDisposable
 
     public ChromiumBrowser Browser { get; }
     public string Description { get; }
+    public string? Color { get; }
     public bool HasExited
     {
         get
@@ -139,18 +141,45 @@ public sealed class BrowserPreviewService : IDisposable
     private static Mutex ProfileMutex() => new(false, "Local\\HostsManager.PreviewProfiles." +
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Profiles.Root.ToUpperInvariant()))));
 
+    public static BrowserPreviewProfile GetProfile(ChromiumBrowser browser,
+        IReadOnlyList<BrowserOverride> overrides, string? additionalFlags)
+    {
+        var flags = BrowserPreviewFlags.Parse(additionalFlags);
+        var rules = BrowserOverrideRules.Build(overrides);
+        var identity = flags.Count == 0 ? rules : rules + "\n" + string.Join("\n", flags);
+        var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..12].ToLowerInvariant();
+        return Profiles.Get(browser.Kind.ToString().ToLowerInvariant(), key);
+    }
+
+    public static void SaveAppearance(BrowserPreviewProfile profile, BrowserPreviewAppearance appearance)
+    {
+        using var mutex = ProfileMutex();
+        Acquire(mutex);
+        try { Profiles.SaveAppearance(profile, appearance, _ => BrowserProfileProcesses.Find(profile).Count != 0); }
+        finally { mutex.ReleaseMutex(); }
+    }
+
+    public static void CloseBackgroundPreview(BrowserPreviewProfile profile)
+    {
+        using var mutex = ProfileMutex();
+        Acquire(mutex);
+        try
+        {
+            var owned = Profiles.Get(profile.Browser, profile.Key);
+            if (!string.Equals(owned.Path, profile.Path, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Not an app-owned preview profile.");
+            BrowserProfileProcesses.CloseBackground(owned);
+        }
+        finally { mutex.ReleaseMutex(); }
+    }
+
     public static void DeleteProfile(BrowserPreviewProfile profile)
     {
         using var mutex = ProfileMutex();
         Acquire(mutex);
         try
         {
-            Profiles.Delete(profile, browser =>
-            {
-                var processes = Process.GetProcessesByName(browser == "edge" ? "msedge" : "chrome");
-                try { return processes.Length != 0; }
-                finally { foreach (var process in processes) process.Dispose(); }
-            });
+            Profiles.Delete(profile, _ => BrowserProfileProcesses.Find(profile).Count != 0);
         }
         finally { mutex.ReleaseMutex(); }
     }
@@ -201,7 +230,7 @@ public sealed class BrowserPreviewService : IDisposable
 
     public BrowserPreviewSession Launch(ChromiumBrowser browser,
         IReadOnlyList<BrowserOverride> overrides, IReadOnlyList<Uri> startUris,
-        string? additionalFlags = null)
+        string? additionalFlags = null, BrowserPreviewAppearance? appearance = null)
     {
         using var profileMutex = ProfileMutex();
         Acquire(profileMutex);
@@ -226,11 +255,12 @@ public sealed class BrowserPreviewService : IDisposable
         var rules = BrowserOverrideRules.Build(overrides);
         // Separate flag configurations so a lingering Chromium process cannot reuse
         // an existing profile and silently ignore newly selected startup switches.
-        var profileIdentity = flags.Count == 0 ? rules : rules + "\n" + string.Join("\n", flags);
-        var profileKey = Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(profileIdentity)))[..12].ToLowerInvariant();
-        var profile = Path.Combine(Profiles.Root, browser.Kind.ToString().ToLowerInvariant(), profileKey);
+        var storedProfile = GetProfile(browser, overrides, additionalFlags);
+        var profileKey = storedProfile.Key;
+        var profile = storedProfile.Path;
         Directory.CreateDirectory(profile);
+        if (appearance is not null) Profiles.SaveAppearance(storedProfile, appearance,
+            _ => BrowserProfileProcesses.Find(storedProfile).Count != 0);
 
         var arguments = new List<string>
         {
@@ -253,8 +283,11 @@ public sealed class BrowserPreviewService : IDisposable
             : distinctTargets == 1
                 ? $"{distinctHosts} domains → {overrides[0].Target}"
                 : $"{distinctHosts} domains across {distinctTargets} targets";
+        var profileName = appearance?.Normalize().Name ?? storedProfile.Metadata?.Name;
+        if (profileName is not null) description = profileName + " · " + description;
 
-        var session = new BrowserPreviewSession(process, browser, description);
+        var color = appearance is null ? storedProfile.Metadata?.Color : appearance.Normalize().Color;
+        var session = new BrowserPreviewSession(process, browser, description, color);
         session.Ended += () =>
         {
             if (ReferenceEquals(_active, session)) _active = null;
