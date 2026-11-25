@@ -1,4 +1,4 @@
-﻿<Window x:Class="HostsManager.MainWindow"
+<Window x:Class="HostsManager.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Hosts manager" Height="640" Width="980" MinWidth="780" MinHeight="420"
@@ -9,6 +9,33 @@
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <Style x:Key="PreviewButton" TargetType="Button" BasedOn="{StaticResource ToolButton}">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border CornerRadius="6" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource AccentBg}" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="{DynamicResource Surface1}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Border0}" />
+                    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+                    <Setter Property="Cursor" Value="Arrow" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Window.InputBindings>
@@ -21,7 +48,6 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -58,35 +84,96 @@
 
         <!-- Toolbar -->
         <Border Grid.Row="1" BorderBrush="{DynamicResource Border0}" BorderThickness="0,0,0,1" Padding="12,8">
-            <Grid>
-                <!--
-                    The toolbar is for the document and nothing else: edit the list on the
-                    left, commit or discard it on the right. Anything that doesn't touch the
-                    pending edit lives behind the overflow button.
-
-                    Reload isn't here on purpose. It and Revert are the same operation, and
-                    re-reading the file only becomes the thing you want once the external
-                    change banner says the file moved underneath you — so that banner and
-                    Ctrl+R own it.
-                -->
-                <StackPanel Orientation="Horizontal">
-                    <Button Content="Add" Style="{StaticResource ToolButton}" Command="{Binding AddCommand}" />
-                    <Button Content="Edit" Style="{StaticResource ToolButton}" Command="{Binding EditCommand}" ToolTip="Edit selected entry (F2)" />
-                    <Button Content="Delete" Style="{StaticResource ToolButton}" Command="{Binding DeleteCommand}" />
-                    <Button Content="Groups" Style="{StaticResource ToolButton}" Command="{Binding GroupsCommand}"
+            <Grid MinHeight="34">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Add" Style="{StaticResource ToolButton}" Command="{Binding AddCommand}" Padding="9,6" />
+                    <Button Content="Edit" Style="{StaticResource ToolButton}" Command="{Binding EditCommand}"
+                            Padding="9,6" ToolTip="Edit selected entry (F2)" />
+                    <Button Content="Groups" Style="{StaticResource ToolButton}" Command="{Binding GroupsCommand}" Padding="9,6"
                             ToolTip="Assign selected entries or enable and disable groups together" />
                 </StackPanel>
 
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="Revert" Style="{StaticResource ToolButton}" Command="{Binding RevertCommand}" />
-                    <Button Content="Save" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}"
-                            Padding="16,6" Margin="4,0,0,0" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="1" Background="{DynamicResource Border0}" Margin="4,2,8,2" />
+                    <Button Style="{StaticResource PreviewButton}" Command="{Binding OpenIsolatedBrowserCommand}"
+                            Padding="8,6"
+                            AutomationProperties.Name="Preview in browser"
+                            AutomationProperties.HelpText="{Binding PreviewToolbarStatus}"
+                            AutomationProperties.AcceleratorKey="Ctrl+Shift+O"
+                            ToolTip="Open the selected entries in an isolated browser (Ctrl+Shift+O)">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Width="13" Height="11" Margin="0,0,6,0" VerticalAlignment="Center"
+                                  Data="M 1,1 H 12 V 10 H 1 Z M 1,4 H 12"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            <TextBlock Text="Preview in browser" FontSize="{Binding FontSize, RelativeSource={RelativeSource AncestorType=Button}}"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <Grid Grid.Column="2" Margin="6,0,8,0" VerticalAlignment="Center"
+                      HorizontalAlignment="Left" MaxWidth="320">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,6,0">
+                        <TextBlock Text="{Binding PreviewToolbarStatus, NotifyOnTargetUpdated=True}"
+                                   TargetUpdated="OnPreviewStatusUpdated" AutomationProperties.LiveSetting="Polite"
+                                   FontSize="12" LineHeight="14"
+                                   LineStackingStrategy="BlockLineHeight" MaxHeight="28" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding PreviewToolbarStatus}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+                                    <Setter Property="TextWrapping" Value="Wrap" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsBrowserPreviewActive}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource Success}" />
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                            <Setter Property="TextWrapping" Value="NoWrap" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <DockPanel Visibility="{Binding IsBrowserPreviewActive, Converter={StaticResource BoolToVis}}">
+                            <Ellipse DockPanel.Dock="Left" Width="10" Height="10" Margin="0,0,5,0"
+                                     Fill="{Binding BrowserPreviewColor}" Stroke="{DynamicResource TextSecondary}"
+                                     ToolTip="{Binding BrowserPreviewColorLabel}"
+                                     AutomationProperties.Name="{Binding BrowserPreviewColorLabel}" />
+                            <TextBlock Text="{Binding BrowserPreviewText}" FontSize="11"
+                                       Foreground="{DynamicResource TextSecondary}" TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding BrowserPreviewText}" />
+                        </DockPanel>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Close preview" Style="{StaticResource LinkButton}"
+                            FocusVisualStyle="{StaticResource KeyboardFocus}"
+                            Foreground="{DynamicResource Success}" VerticalAlignment="Center" Margin="2,0,4,0"
+                            Command="{Binding EndBrowserPreviewCommand}"
+                            Visibility="{Binding IsBrowserPreviewActive, Converter={StaticResource BoolToVis}}" />
+                </Grid>
+
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="1" Background="{DynamicResource Border0}" Margin="0,2,8,2" />
+                    <Button Content="Revert" Style="{StaticResource ToolButton}" Command="{Binding RevertCommand}" Padding="8,6" />
+                    <Button Content="Save changes" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}"
+                            Padding="11,6" />
                     <Border Width="1" Background="{DynamicResource Border0}" Margin="8,2" />
                     <Button x:Name="MoreButton" Style="{StaticResource IconButton}" Click="OnMore"
                             ToolTip="More actions" AutomationProperties.Name="More actions">
                         <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="14" />
                         <Button.ContextMenu>
                             <ContextMenu Style="{StaticResource OverflowMenu}">
+                                <MenuItem Header="Delete selected entry" Style="{StaticResource OverflowMenuItem}"
+                                          Command="{Binding DeleteCommand}" InputGestureText="Del" />
+                                <Separator Style="{StaticResource OverflowSeparator}" />
                                 <MenuItem Header="Backups…" Style="{StaticResource OverflowMenuItem}"
                                           Command="{Binding BackupsCommand}" />
                                 <MenuItem Header="Browser preview data…" Style="{StaticResource OverflowMenuItem}"
@@ -134,27 +221,8 @@
             </Grid>
         </Border>
 
-        <!-- A Chromium process whose resolver is scoped to the selected mapping -->
-        <Border Grid.Row="4" Background="{DynamicResource SuccessBg}" BorderBrush="{DynamicResource Success}"
-                BorderThickness="0,0,0,1" Padding="16,10"
-                Visibility="{Binding IsBrowserPreviewActive, Converter={StaticResource BoolToVis}}">
-            <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <Ellipse Width="18" Height="18" Fill="{Binding BrowserPreviewColor}" Stroke="{DynamicResource TextSecondary}"
-                         StrokeThickness="1" Margin="0,0,10,0" ToolTip="{Binding BrowserPreviewColorLabel}"
-                         AutomationProperties.Name="{Binding BrowserPreviewColorLabel}"/>
-                <StackPanel Grid.Column="1" Margin="0,0,12,0">
-                    <TextBlock Text="{Binding BrowserPreviewText}" FontSize="12.5" TextWrapping="Wrap"
-                               Foreground="{DynamicResource Success}"/>
-                    <TextBlock Text="{Binding BrowserPreviewColorLabel}" FontSize="12" Foreground="{DynamicResource TextSecondary}"/>
-                </StackPanel>
-                <Button Grid.Column="2" Content="Close preview" Style="{StaticResource LinkButton}" HorizontalAlignment="Right"
-                        Foreground="{DynamicResource Success}" Command="{Binding EndBrowserPreviewCommand}" />
-            </Grid>
-        </Border>
-
         <!-- Filter -->
-        <Border Grid.Row="5" BorderBrush="{DynamicResource Border0}" BorderThickness="0,0,0,1" Padding="12,10">
+        <Border Grid.Row="4" BorderBrush="{DynamicResource Border0}" BorderThickness="0,0,0,1" Padding="12,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -206,7 +274,7 @@
         </Border>
 
         <!-- Entries -->
-        <DataGrid Grid.Row="6" x:Name="EntryGrid" ItemsSource="{Binding EntriesView}"
+        <DataGrid Grid.Row="5" x:Name="EntryGrid" ItemsSource="{Binding EntriesView}"
                   AutomationProperties.Name="Hosts entries"
                   SelectedItem="{Binding SelectedEntry}"
                   SelectionChanged="OnEntrySelectionChanged"
@@ -377,7 +445,7 @@
         </DataGrid>
 
         <!-- Status bar. Showing the encoding is the visible proof the format is preserved. -->
-        <Border Grid.Row="7" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border0}"
+        <Border Grid.Row="6" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource Border0}"
                 BorderThickness="0,1,0,0" Padding="14,7">
             <Grid>
                 <Grid.ColumnDefinitions>

@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using HostsManager.Services;
 using HostsManager.ViewModels;
@@ -88,6 +90,7 @@ public partial class MainWindow : Window
             {
                 ClearBrowserSession(session);
             });
+            if (session.IsEnded) ClearBrowserSession(session);
         }
         catch (Exception ex)
         {
@@ -206,6 +209,13 @@ public partial class MainWindow : Window
             .OfType<EntryViewModel>()
             .Where(entry => EntryGrid.SelectedItems.Contains(entry));
         vm.SetSelectedEntries(selected);
+    }
+
+    private void OnPreviewStatusUpdated(object sender, DataTransferEventArgs e)
+    {
+        if (sender is TextBlock { IsLoaded: true } status
+            && AutomationPeer.ListenerExists(AutomationEvents.LiveRegionChanged))
+            UIElementAutomationPeer.CreatePeerForElement(status)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
     }
 
     private void OnEntryGridPreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)

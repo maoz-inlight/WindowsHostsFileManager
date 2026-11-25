@@ -58,8 +58,7 @@ public sealed class MainViewModel : Observable, IDisposable
         ToggleCommand = new RelayCommand(ToggleSelected, () => SelectedEntry is { CanToggle: true });
         ShowProblemsCommand = new RelayCommand(() => Filter = EntryFilter.Problems);
         DeleteRowCommand = new RelayCommand(o => DeleteEntry(o as EntryViewModel));
-        OpenIsolatedBrowserCommand = new RelayCommand(OpenIsolatedBrowser,
-            () => SelectedEntries.Count > 0);
+        OpenIsolatedBrowserCommand = new RelayCommand(OpenIsolatedBrowser, CanOpenIsolatedBrowser);
         EndBrowserPreviewCommand = new RelayCommand(() => EndBrowserPreview?.Invoke(),
             () => IsBrowserPreviewActive);
     }
@@ -115,6 +114,7 @@ public sealed class MainViewModel : Observable, IDisposable
     }
 
     private IReadOnlyList<EntryViewModel> _selectedEntries = Array.Empty<EntryViewModel>();
+    private int _invalidSelectionCount;
     public IReadOnlyList<EntryViewModel> SelectedEntries => _selectedEntries;
 
     public string OpenIsolatedBrowserText => SelectedEntries.Count switch
@@ -125,20 +125,39 @@ public sealed class MainViewModel : Observable, IDisposable
 
     public void SetSelectedEntries(IEnumerable<EntryViewModel> entries)
     {
-        _selectedEntries = entries
-            .Where(entry => entry.Line.IsEntry)
-            .Distinct()
-            .ToArray();
+        var previousStatus = PreviewToolbarStatus;
+        var selection = entries.Distinct().ToArray();
+        _selectedEntries = selection.Where(entry => entry.Line.IsEntry).ToArray();
+        _invalidSelectionCount = selection.Length - _selectedEntries.Count;
         Raise(nameof(SelectedEntries));
         Raise(nameof(OpenIsolatedBrowserText));
+        if (PreviewToolbarStatus != previousStatus) Raise(nameof(PreviewToolbarStatus));
         System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+    }
+
+    public string PreviewToolbarStatus
+    {
+        get
+        {
+            if (IsBrowserPreviewActive) return "Preview running";
+            if (SelectedEntries.Count == 0)
+                return _invalidSelectionCount == 0 ? "Select entries to preview" : "Select a valid entry to preview";
+
+            var selected = SelectedEntries.Count == 1 ? "1 entry selected" : $"{SelectedEntries.Count} entries selected";
+            return _invalidSelectionCount == 0 ? selected : $"{selected} · {_invalidSelectionCount} invalid skipped";
+        }
     }
 
     private bool _isBrowserPreviewActive;
     public bool IsBrowserPreviewActive
     {
         get => _isBrowserPreviewActive;
-        private set => Set(ref _isBrowserPreviewActive, value);
+        private set
+        {
+            if (!Set(ref _isBrowserPreviewActive, value)) return;
+            Raise(nameof(PreviewToolbarStatus));
+            System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+        }
     }
 
     private string _browserPreviewText = "";
@@ -249,9 +268,11 @@ public sealed class MainViewModel : Observable, IDisposable
 
     // ---- operations -------------------------------------------------------
 
+    private bool CanOpenIsolatedBrowser() => !IsBrowserPreviewActive && SelectedEntries.Count > 0;
+
     private void OpenIsolatedBrowser()
     {
-        if (SelectedEntries.Count > 0)
+        if (CanOpenIsolatedBrowser())
             RequestOpenIsolatedBrowser?.Invoke(SelectedEntries);
     }
 
@@ -260,9 +281,8 @@ public sealed class MainViewModel : Observable, IDisposable
         var appearance = new BrowserPreviewAppearance(null, color).Normalize();
         BrowserPreviewColor = appearance.Color ?? "#808080";
         BrowserPreviewColorLabel = appearance.ColorLabel;
-        BrowserPreviewText = $"Isolated browser active · {description}";
+        BrowserPreviewText = description;
         IsBrowserPreviewActive = true;
-        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
     }
 
     public void ClearBrowserPreview()
@@ -271,7 +291,6 @@ public sealed class MainViewModel : Observable, IDisposable
         BrowserPreviewText = "";
         BrowserPreviewColor = "#808080";
         BrowserPreviewColorLabel = "Browser default";
-        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
     }
 
     public void Initialize()
